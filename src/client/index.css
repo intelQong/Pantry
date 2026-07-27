@@ -59,8 +59,17 @@
   --radius-xl:  1.25rem;
   --radius-full: 9999px;
 
-  /* Typography */
+  /* Typography
+     Inter carries body text; Space Grotesk carries headings, numerals and the
+     splash. Two families, not three -- the mono face a third role would want is
+     doing nothing Space Grotesk's tabular figures can't. */
   --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* The splash yellow. Minecraft's #FFFF00 vibrates against a light surface and
+     fails contrast, so this is pulled down in lightness and slightly warmed --
+     recognisably the same joke, actually readable. */
+  --color-splash: oklch(0.72 0.16 85);
 
   /* Animations */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -123,6 +132,13 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* The splash's pulse. Anchored at rotate(-4deg) so the tilt holds while only
+   the scale moves -- the original bobs, it doesn't wobble. */
+@keyframes splash-bob {
+  0%, 100% { transform: rotate(-4deg) scale(1); }
+  50%      { transform: rotate(-4deg) scale(1.055); }
 }
 
 /* ------------------------------------------------------------------ */
@@ -231,6 +247,38 @@ body {
 
 .gradient-accent {
   background: linear-gradient(135deg, var(--color-accent-500), var(--color-accent-700));
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: 'ss01' 1;
+}
+
+/* Small caps-ish section label. Used instead of a heavier heading so section
+   titles recede and the content carries the page. */
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* The signature. Everything else on this screen is deliberately quiet so this
+   is the one thing that shouts. */
+.splash {
+  display: inline-block;
+  transform-origin: left center;
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-splash);
+  transform: rotate(-4deg);
+  animation: splash-bob 2.4s var(--ease-smooth) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash { animation: none; }
 }
 
 /* Skeleton loading */

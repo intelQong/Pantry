@@ -100,7 +100,15 @@ export function App() {
 
       {state.phase === "ready" && (
         <Shell route={route} navigate={navigate}>
-          {route.page === "today" && <TodayScreen categories={categories} />}
+          {route.page === "today" && (
+            <TodayScreen
+              categories={categories}
+              memberName={
+                state.members.find((m) => m.id === state.memberId)?.name ?? "there"
+              }
+              onNavigate={navigate}
+            />
+          )}
           {route.page === "list" && <ListScreen categories={categories} navigate={navigate} />}
           {route.page === "shop" && <ShopModeScreen categories={categories} navigate={navigate} />}
           {route.page === "pantry" && <PantryScreen categories={categories} />}
