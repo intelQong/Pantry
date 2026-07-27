@@ -7,7 +7,14 @@
 // Everything here uses Web Crypto only -- Node's crypto is not available in a
 // Worker, and the `web-push`-style npm packages that assume it will not run.
 
-const PBKDF2_ITERATIONS = 210_000; // OWASP 2023 guidance for PBKDF2-SHA256
+// Cloudflare Workers rejects PBKDF2 above 100k iterations with
+// "NotSupportedError: iteration counts above 100000 are not supported".
+// This is the platform ceiling, not a preference -- OWASP would ask for more.
+// The local workerd used by vitest does NOT enforce the cap, so exceeding it
+// passes every test and then throws on every login in production. See the
+// regression test in test/auth.test.ts.
+const PBKDF2_MAX_ITERATIONS = 100_000;
+const PBKDF2_ITERATIONS = PBKDF2_MAX_ITERATIONS;
 const SESSION_TTL_SECONDS = 365 * 24 * 60 * 60; // 1 year: this is a home appliance
 export const SESSION_COOKIE = "pantry_session";
 

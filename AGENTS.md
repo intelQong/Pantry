@@ -154,6 +154,11 @@ stub `globalThis.fetch`.
   bindings are declared by augmenting that namespace in `test/env.d.ts`.
 - **`run_worker_first: ["/api/*"]`** in `wrangler.jsonc` is what routes API calls to the
   Worker while everything else falls through to static assets with SPA fallback.
+- **PBKDF2 is capped at 100,000 iterations on Workers.** Exceeding it throws
+  `NotSupportedError` at runtime — but the local workerd used by vitest does *not*
+  enforce the cap. Setting 210k passed all 103 tests and then 500'd on every signup and
+  login in production. Asserted now by a test in `test/auth.test.ts`. Treat any Web
+  Crypto limit as untested-by-default and verify against a real deploy.
 - **`worker-configuration.d.ts` is gitignored and generated.** Run `npx wrangler types`
   after changing bindings, or typecheck fails on missing `D1Database`/`ExecutionContext`.
 - **`wrangler.jsonc` has a placeholder `database_id`.** Replace it after creating the D1

@@ -41,6 +41,17 @@ describe("passcode hashing", () => {
     expect(await hashPasscode("same")).not.toBe(await hashPasscode("same"));
   });
 
+  // Regression: this was set to 210_000 on OWASP's advice, which the local
+  // workerd accepts silently but production rejects with
+  // "NotSupportedError: iteration counts above 100000 are not supported".
+  // Every signup and login 500'd in production while all tests stayed green,
+  // so the ceiling has to be asserted explicitly rather than exercised.
+  it("stays within the Workers PBKDF2 iteration ceiling of 100k", async () => {
+    const iterations = Number((await hashPasscode("x")).split("$")[1]);
+    expect(iterations).toBeGreaterThan(0);
+    expect(iterations).toBeLessThanOrEqual(100_000);
+  });
+
   it("rejects malformed stored hashes instead of throwing", async () => {
     for (const bad of ["", "nonsense", "pbkdf2$abc$x$y", "sha1$1$x$y", "pbkdf2$1$x"]) {
       expect(await verifyPasscode("whatever", bad)).toBe(false);
