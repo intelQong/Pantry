@@ -56,7 +56,7 @@ export async function runDigestSweep(env: Env, nowSecondsValue: number): Promise
     const candidates = await env.DB.prepare(
       `SELECT i.id, i.name, i.last_purchased_at, i.created_at, i.restock_interval_days
          FROM item i
-        WHERE i.household_id = ? AND i.archived = 0 AND i.is_staple = 1
+        WHERE i.household_id = ? AND i.is_staple = 1
           AND NOT EXISTS (
             SELECT 1 FROM list_entry le
              WHERE le.item_id = i.id AND le.household_id = i.household_id AND le.status = 'pending'

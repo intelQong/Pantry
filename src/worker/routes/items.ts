@@ -92,7 +92,7 @@ items.get("/items", requireSession, async (c) => {
     c.env.DB.prepare(
       `SELECT ${ITEM_COLUMNS}
          FROM item
-        WHERE household_id = ? AND archived = 0
+        WHERE household_id = ?
         ORDER BY name`,
     )
       .bind(session.householdId)
@@ -113,7 +113,7 @@ items.get("/today", requireMember, async (c) => {
     c.env.DB.prepare(
       `SELECT ${ITEM_COLUMNS}
          FROM item
-        WHERE household_id = ? AND archived = 0 AND is_staple = 1`,
+        WHERE household_id = ? AND is_staple = 1`,
     )
       .bind(session.householdId)
       .all<ItemRow>(),
@@ -208,8 +208,10 @@ items.post("/items", requireMember, async (c) => {
     throw err;
   }
 
-  const row = await c.env.DB.prepare(`SELECT ${ITEM_COLUMNS} FROM item WHERE id = ?`)
-    .bind(id)
+  const row = await c.env.DB.prepare(
+    `SELECT ${ITEM_COLUMNS} FROM item WHERE id = ? AND household_id = ?`,
+  )
+    .bind(id, session.householdId)
     .first<ItemRow>();
 
   return c.json(toItem(row!), 201);
@@ -300,8 +302,10 @@ items.patch("/items/:id", requireSession, async (c) => {
     }
   }
 
-  const row = await c.env.DB.prepare(`SELECT ${ITEM_COLUMNS} FROM item WHERE id = ?`)
-    .bind(id)
+  const row = await c.env.DB.prepare(
+    `SELECT ${ITEM_COLUMNS} FROM item WHERE id = ? AND household_id = ?`,
+  )
+    .bind(id, session.householdId)
     .first<ItemRow>();
 
   return c.json(toItem(row!));
@@ -313,7 +317,7 @@ items.delete("/items/:id", requireSession, async (c) => {
   const id = c.req.param("id");
 
   const result = await c.env.DB.prepare(
-    "UPDATE item SET archived = 1 WHERE id = ? AND household_id = ?",
+    "DELETE FROM item WHERE id = ? AND household_id = ?",
   )
     .bind(id, session.householdId)
     .run();

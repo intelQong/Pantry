@@ -168,8 +168,13 @@ list.patch("/list/:id", requireSession, async (c) => {
   }
 
   if (sets.length > 0) {
-    values.push(id);
-    await c.env.DB.prepare(`UPDATE list_entry SET ${sets.join(", ")} WHERE id = ?`)
+    // Scoped on the statement itself rather than relying on the existence
+    // check above: check-then-act leaves the write correct only for as long as
+    // nobody edits the check.
+    values.push(id, session.householdId);
+    await c.env.DB.prepare(
+      `UPDATE list_entry SET ${sets.join(", ")} WHERE id = ? AND household_id = ?`,
+    )
       .bind(...values)
       .run();
   }

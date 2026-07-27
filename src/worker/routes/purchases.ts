@@ -213,9 +213,10 @@ purchases.get("/items/:id/purchases", requireSession, async (c) => {
 
   const rows = await c.env.DB.prepare(
     `SELECT id, item_id, purchased_at, qty, unit, price_total, bought_by, note
-       FROM purchase WHERE item_id = ? ORDER BY purchased_at DESC`,
+       FROM purchase WHERE item_id = ? AND household_id = ?
+      ORDER BY purchased_at DESC`,
   )
-    .bind(itemId)
+    .bind(itemId, session.householdId)
     .all<PurchaseRow>();
 
   return c.json(rows.results.map(toPurchase));

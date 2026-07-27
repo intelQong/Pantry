@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { ListEntry, Category, ItemWithStatus } from "@shared/types";
+import type { ListEntry, Category, Item } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
 import { suggest } from "../lib/catalog";
@@ -16,7 +16,7 @@ export function ListScreen({
   navigate: (path: string) => void;
 }) {
   const [entries, setEntries] = useState<ListEntry[]>([]);
-  const [items, setItems] = useState<ItemWithStatus[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -114,7 +114,7 @@ export function ListScreen({
         const item = await api.createItem({ name, isStaple: true, defaultQty: qty });
         const entry = await api.addToList({ itemId: item.id, qty });
         setEntries((prev) => [...prev, entry]);
-        setItems((prev) => [...prev, item as (typeof prev)[number]]);
+        setItems((prev) => [...prev, item]);
         toast(`${name} added and now tracked`);
       } catch (err) {
         // The usual failure is a name that already exists in the pantry, which

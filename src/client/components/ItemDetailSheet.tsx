@@ -24,6 +24,7 @@ export function ItemDetailSheet({
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { toast } = useToast();
 
   // Edit form state
@@ -92,13 +93,13 @@ export function ItemDetailSheet({
   const handleDelete = useCallback(async () => {
     try {
       await api.deleteItem(itemId);
-      toast("Item archived");
+      toast(`${item?.name ?? "Item"} deleted`);
       onClose();
       onUpdated();
     } catch {
       toast("Failed to delete", "error");
     }
-  }, [itemId, toast, onClose, onUpdated]);
+  }, [itemId, item, toast, onClose, onUpdated]);
 
   return (
     <BottomSheet open={open} onClose={onClose} title={editing ? "Edit Item" : item?.name}>
@@ -274,21 +275,50 @@ export function ItemDetailSheet({
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setEditing(true)}
-              className="flex-1 py-2 rounded-xl bg-surface-sunken text-sm font-medium text-text hover:bg-border transition-colors"
-            >
-              Edit
-            </button>
-            <button
-              onClick={handleDelete}
-              className="py-2 px-4 rounded-xl text-sm font-medium text-danger hover:bg-danger-bg transition-colors"
-            >
-              Archive
-            </button>
-          </div>
+          {/* Actions. Delete is confirmed in place: it now removes the row
+              outright, and purchase.item_id cascades, so the item's spend and
+              consumption history goes with it. That is worth one deliberate tap. */}
+          {confirmingDelete ? (
+            <div className="rounded-xl border border-danger/30 bg-danger-bg/40 p-3">
+              <p className="text-sm text-text">
+                Delete {item.name}?
+              </p>
+              <p className="text-xs text-text-secondary mt-1">
+                {purchases.length > 0
+                  ? `Its ${purchases.length} recorded ${purchases.length === 1 ? "purchase" : "purchases"} will go too, and stop counting towards Insights.`
+                  : "It has no purchase history, so nothing else is lost."}
+              </p>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  className="flex-1 py-2 rounded-lg bg-surface-raised border border-border text-sm font-medium text-text-secondary"
+                >
+                  Keep it
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 py-2 rounded-lg bg-danger text-white text-sm font-semibold"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditing(true)}
+                className="flex-1 py-2 rounded-xl bg-surface-sunken text-sm font-medium text-text hover:bg-border transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                className="py-2 px-4 rounded-xl text-sm font-medium text-danger hover:bg-danger-bg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          )}
 
           {/* Purchase history */}
           {purchases.length > 0 && (

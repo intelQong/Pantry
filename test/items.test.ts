@@ -73,7 +73,6 @@ describe("items", () => {
       isStaple: true,
       restockIntervalDays: 7,
       intervalLocked: false,
-      archived: false,
       lastPurchasedAt: null,
     });
   });
@@ -89,7 +88,7 @@ describe("items", () => {
     expect(res.status).toBe(409);
   });
 
-  it("lists all non-archived items for the household", async () => {
+  it("lists the items in the household", async () => {
     const res = await get("/api/items", memberCookie);
     const list = await res.json<Array<{ name: string }>>();
     expect(list.map((i) => i.name)).toEqual(expect.arrayContaining(["Milk", "Butter"]));
@@ -110,7 +109,10 @@ describe("items", () => {
     expect(updated).toMatchObject({ unit: "kg", defaultQty: 5, notes: "5kg bag", isStaple: false });
   });
 
-  it("soft-deletes: archived items disappear from GET but aren't destroyed", async () => {
+  it("deletes an item outright", async () => {
+    // Deletion used to set an archived flag that nothing could clear, so an
+    // item vanished from every screen while its row lived on forever. The row
+    // goes now, and the sheet confirms first because it is not reversible.
     const create = await json("/api/items", { name: "Onions" }, memberCookie);
     const created = await create.json<{ id: string }>();
 
@@ -121,10 +123,42 @@ describe("items", () => {
     const names = (await list.json<Array<{ name: string }>>()).map((i) => i.name);
     expect(names).not.toContain("Onions");
 
-    const row = await env.DB.prepare("SELECT archived FROM item WHERE id = ?")
+    const row = await env.DB.prepare("SELECT id FROM item WHERE id = ?")
       .bind(created.id)
-      .first<{ archived: number }>();
-    expect(row?.archived).toBe(1);
+      .first();
+    expect(row).toBeNull();
+  });
+
+  it("takes the item's purchase history with it", async () => {
+    // purchase.item_id cascades. This is the cost of a real delete, and the
+    // reason the sheet spells it out before doing it.
+    const created = await (
+      await json("/api/items", { name: "Cardamom" }, memberCookie)
+    ).json<{ id: string }>();
+    await json("/api/purchases", { itemId: created.id, priceTotal: 5000 }, memberCookie);
+
+    const before = await env.DB.prepare("SELECT COUNT(*) n FROM purchase WHERE item_id = ?")
+      .bind(created.id)
+      .first<{ n: number }>();
+    expect(before?.n).toBe(1);
+
+    await json(`/api/items/${created.id}`, {}, memberCookie, "DELETE");
+
+    const after = await env.DB.prepare("SELECT COUNT(*) n FROM purchase WHERE item_id = ?")
+      .bind(created.id)
+      .first<{ n: number }>();
+    expect(after?.n).toBe(0);
+  });
+
+  it("frees the name for reuse once deleted", async () => {
+    await json("/api/items", { name: "Reused" }, memberCookie);
+    expect((await json("/api/items", { name: "Reused" }, memberCookie)).status).toBe(409);
+
+    const all = await (await get("/api/items", memberCookie)).json<Array<{ id: string; name: string }>>();
+    const existing = all.find((i) => i.name === "Reused")!;
+    await json(`/api/items/${existing.id}`, {}, memberCookie, "DELETE");
+
+    expect((await json("/api/items", { name: "Reused" }, memberCookie)).status).toBe(201);
   });
 
   it("404s patching or deleting an item that doesn't exist", async () => {
@@ -216,10 +250,10 @@ describe("cross-household isolation", () => {
     const res = await json(`/api/items/${otherItemId}`, {}, memberCookie, "DELETE");
     expect(res.status).toBe(404);
 
-    const row = await env.DB.prepare("SELECT archived FROM item WHERE id = ?")
+    const row = await env.DB.prepare("SELECT id FROM item WHERE id = ?")
       .bind(otherItemId)
-      .first<{ archived: number }>();
-    expect(row?.archived).toBe(0);
+      .first();
+    expect(row).not.toBeNull();
   });
 
   it("cannot read another household's purchase history", async () => {

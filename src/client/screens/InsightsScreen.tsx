@@ -33,7 +33,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
 
   const stats = useMemo(() => {
     if (!items) return null;
-    const active = items.filter((i) => !i.archived);
+    const active = items;
     const basket = active.filter((i) => listItemIds.has(i.id) || i.status !== "ok");
     const priced = basket.filter((i) => i.defaultPrice !== null);
 
