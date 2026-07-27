@@ -19,8 +19,6 @@ export function ListScreen({
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [qtyDraft, setQtyDraft] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -133,10 +131,10 @@ export function ListScreen({
 
   /** Commits the quantity typed on a row. Blank clears it back to unspecified. */
   const handleSaveQty = useCallback(
-    async (id: string) => {
-      const raw = qtyDraft.trim();
-      const qty = raw === "" ? null : parseQty(raw, 1);
-      setEditingId(null);
+    async (id: string, raw: string, previous: number | null) => {
+      const trimmed = raw.trim();
+      const qty = trimmed === "" ? null : parseQty(trimmed, 1);
+      if (qty === previous) return; // nothing typed, or typed back to the same
 
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, qty } : e)));
       try {
@@ -146,7 +144,7 @@ export function ListScreen({
         fetchAll();
       }
     },
-    [qtyDraft, toast, fetchAll],
+    [toast, fetchAll],
   );
 
   const handleDelete = useCallback(
@@ -284,48 +282,40 @@ export function ListScreen({
                       key={entry.id}
                       className="flex items-center gap-3 px-3 py-2.5 card-row"
                     >
-                      {/* Tapping the row reveals its quantity. Kept off the add
-                          bar so adding stays one field and one keystroke, and
-                          the amount is set on the thing it belongs to. */}
-                      <button
-                        onClick={() => {
-                          setEditingId(entry.id);
-                          setQtyDraft(entry.qty === null ? "" : String(entry.qty));
-                        }}
-                        className="flex-1 min-w-0 text-left"
-                      >
-                        <span className="text-sm font-medium text-text">{entry.displayName}</span>
-                        {entry.qty !== null && editingId !== entry.id && (
-                          <span className="numeral text-xs text-text-tertiary ml-2">
-                            ×{entry.qty}
-                          </span>
-                        )}
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-text truncate">
+                          {entry.displayName}
+                        </span>
                         {entry.note && (
                           <span className="block text-xs text-text-tertiary mt-0.5 truncate">
                             {entry.note}
                           </span>
                         )}
-                      </button>
+                      </span>
 
-                      {editingId === entry.id && (
-                        <span className="flex items-center gap-1 shrink-0 bg-surface-sunken rounded-lg px-2 py-1">
-                          <span className="text-text-tertiary text-xs">×</span>
-                          <input
-                            autoFocus
-                            value={qtyDraft}
-                            onChange={(e) => setQtyDraft(e.target.value)}
-                            onBlur={() => handleSaveQty(entry.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleSaveQty(entry.id);
-                              if (e.key === "Escape") setEditingId(null);
-                            }}
-                            inputMode="decimal"
-                            placeholder="1"
-                            aria-label={`Quantity for ${entry.displayName}`}
-                            className="w-10 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
-                          />
-                        </span>
-                      )}
+                      {/* Always present rather than revealed on tap. The reveal
+                          relied on autoFocus, which iOS frequently ignores for
+                          an input mounted after the gesture, so the field could
+                          appear and close again before it was ever usable.
+                          Uncontrolled, so there is no per-row draft state and
+                          nothing to race: the key resets it if the value
+                          changes underneath. */}
+                      <span className="flex items-center gap-1 shrink-0 bg-surface-sunken rounded-lg px-2 py-1">
+                        <span className="text-text-tertiary text-xs">×</span>
+                        <input
+                          key={`${entry.id}:${entry.qty ?? ""}`}
+                          defaultValue={entry.qty === null ? "" : String(entry.qty)}
+                          onBlur={(e) => handleSaveQty(entry.id, e.target.value, entry.qty)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                          inputMode="decimal"
+                          placeholder="1"
+                          aria-label={`Quantity for ${entry.displayName}`}
+                          className="w-8 bg-transparent text-sm text-text text-center outline-none placeholder:text-text-tertiary"
+                        />
+                      </span>
+
                       <button
                         onClick={() => handleDelete(entry.id)}
                         className="shrink-0 w-7 h-7 rounded-full text-text-tertiary hover:text-danger hover:bg-danger-bg flex items-center justify-center transition-colors"
