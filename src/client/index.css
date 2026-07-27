@@ -251,10 +251,23 @@ body::before {
 /* ------------------------------------------------------------------ */
 /* Utilities                                                           */
 /* ------------------------------------------------------------------ */
+/*
+ * The translucent bottom nav.
+ *
+ * The colour cannot come from var(--color-surface) because it needs an alpha
+ * channel, so it is stated literally -- which means it must be re-stated for
+ * every theme path the tokens cover. It previously had only a `.dark` override
+ * and no media query, so in Auto mode the whole app went dark and the nav
+ * stayed cream.
+ */
 .glass {
   background: oklch(0.957 0.011 84 / 0.82);
   backdrop-filter: blur(16px) saturate(1.6);
   -webkit-backdrop-filter: blur(16px) saturate(1.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .glass { background: oklch(0.186 0.006 75 / 0.85); }
 }
 
 .dark .glass { background: oklch(0.186 0.006 75 / 0.85); }
@@ -296,8 +309,15 @@ body::before {
   box-shadow: 0 1px 1.5px oklch(0.35 0.03 60 / 0.045);
 }
 
-.dark .card-row,
-:root:not(.light) .card-row {
+/* Same media-query-plus-class shape as the colour tokens. `:root:not(.light)`
+   on its own also matches in light mode, which put the dark shadow on cream. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .card-row {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.22);
+  }
+}
+
+.dark .card-row {
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.22);
 }
 

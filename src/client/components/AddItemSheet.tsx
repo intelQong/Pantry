@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import type { Category } from "@shared/types";
 import * as api from "../api";
+import { parseQty, parseIntervalDays } from "../lib/numbers";
 import { parseMoney, CURRENCY_SYMBOL } from "../lib/money";
 import { suggest, matchCategory } from "../lib/catalog";
 import { BottomSheet } from "../components/BottomSheet";
@@ -23,10 +24,10 @@ export function AddItemSheet({
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [unit, setUnit] = useState("pcs");
-  const [defaultQty, setDefaultQty] = useState(1);
+  const [defaultQty, setDefaultQty] = useState("1");
   const [brand, setBrand] = useState("");
   const [notes, setNotes] = useState("");
-  const [interval, setInterval] = useState(7);
+  const [interval, setInterval] = useState("7");
   const [locked, setLocked] = useState(false);
   const [isStaple, setIsStaple] = useState(true);
   const [price, setPrice] = useState("");
@@ -49,10 +50,10 @@ export function AddItemSheet({
     setName("");
     setCategoryId(null);
     setUnit("pcs");
-    setDefaultQty(1);
+    setDefaultQty("1");
     setBrand("");
     setNotes("");
-    setInterval(7);
+    setInterval("7");
     setLocked(false);
     setIsStaple(true);
   };
@@ -65,10 +66,10 @@ export function AddItemSheet({
         name: name.trim(),
         categoryId,
         unit,
-        defaultQty,
+        defaultQty: parseQty(defaultQty, 1),
         brand: brand.trim() || null,
         notes: notes.trim() || null,
-        restockIntervalDays: interval,
+        restockIntervalDays: parseIntervalDays(interval, 7),
         intervalLocked: locked,
         isStaple,
         defaultPrice: parseMoney(price),
@@ -114,7 +115,7 @@ export function AddItemSheet({
                       // Filling in the interval and category is the real value
                       // here: those are the two fields nobody wants to guess.
                       setName(sg.name);
-                      setInterval(sg.days);
+                      setInterval(String(sg.days));
                       const match = matchCategory(categories, sg.category);
                       if (match) setCategoryId(match.id);
                       setShowSuggestions(false);
@@ -174,9 +175,10 @@ export function AddItemSheet({
           <label className="block">
             <span className="text-xs font-medium text-text-secondary">Default Qty</span>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={defaultQty}
-              onChange={(e) => setDefaultQty(Number(e.target.value) || 1)}
+              onChange={(e) => setDefaultQty(e.target.value)}
               className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none"
             />
           </label>
@@ -211,7 +213,7 @@ export function AddItemSheet({
               min={1}
               max={365}
               value={interval}
-              onChange={(e) => setInterval(Number(e.target.value) || 7)}
+              onChange={(e) => setInterval(e.target.value)}
               className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none"
             />
           </label>

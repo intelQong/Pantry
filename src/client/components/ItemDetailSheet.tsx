@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Category, Purchase } from "@shared/types";
 import * as api from "../api";
+import { parseQty, parseIntervalDays } from "../lib/numbers";
 import { parseMoney, toInputValue, formatMoney, CURRENCY_SYMBOL } from "../lib/money";
 import { Icon } from "./Icon";
 import { BottomSheet } from "../components/BottomSheet";
@@ -29,10 +30,10 @@ export function ItemDetailSheet({
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [unit, setUnit] = useState("pcs");
-  const [defaultQty, setDefaultQty] = useState(1);
+  const [defaultQty, setDefaultQty] = useState("1");
   const [brand, setBrand] = useState("");
   const [notes, setNotes] = useState("");
-  const [interval, setInterval] = useState(7);
+  const [interval, setInterval] = useState("7");
   const [locked, setLocked] = useState(false);
   const [isStaple, setIsStaple] = useState(true);
   const [price, setPrice] = useState("");
@@ -50,10 +51,10 @@ export function ItemDetailSheet({
         setName(found.name);
         setCategoryId(found.categoryId);
         setUnit(found.unit);
-        setDefaultQty(found.defaultQty);
+        setDefaultQty(String(found.defaultQty));
         setBrand(found.brand ?? "");
         setNotes(found.notes ?? "");
-        setInterval(found.restockIntervalDays);
+        setInterval(String(found.restockIntervalDays));
         setLocked(found.intervalLocked);
         setIsStaple(found.isStaple);
         setPrice(toInputValue(found.defaultPrice));
@@ -70,10 +71,10 @@ export function ItemDetailSheet({
         name: name.trim(),
         categoryId,
         unit,
-        defaultQty,
+        defaultQty: parseQty(defaultQty, 1),
         brand: brand.trim() || null,
         notes: notes.trim() || null,
-        restockIntervalDays: interval,
+        restockIntervalDays: parseIntervalDays(interval, 7),
         intervalLocked: locked,
         isStaple,
         defaultPrice: parseMoney(price),
@@ -140,9 +141,10 @@ export function ItemDetailSheet({
             <label className="block">
               <span className="text-xs font-medium text-text-secondary">Default Qty</span>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={defaultQty}
-                onChange={(e) => setDefaultQty(Number(e.target.value) || 1)}
+                onChange={(e) => setDefaultQty(e.target.value)}
                 className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none"
               />
             </label>
@@ -195,7 +197,7 @@ export function ItemDetailSheet({
                 min={1}
                 max={365}
                 value={interval}
-                onChange={(e) => setInterval(Number(e.target.value) || 7)}
+                onChange={(e) => setInterval(e.target.value)}
                 className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none"
               />
             </label>
