@@ -19,7 +19,8 @@ export function ListScreen({
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [addQty, setAddQty] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [qtyDraft, setQtyDraft] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,18 +67,12 @@ export function ListScreen({
         )
       : [];
 
-  const takeQty = useCallback(() => {
-    const qty = parseQty(addQty, 1);
-    setAddQty("");
-    return qty;
-  }, [addQty]);
-
   const handleAddItem = useCallback(
     async (itemId: string) => {
       setShowSuggestions(false);
       setQuery("");
       try {
-        const entry = await api.addToList({ itemId, qty: takeQty() });
+        const entry = await api.addToList({ itemId });
         setEntries((prev) => [...prev, entry]);
         toast("Added to list");
       } catch {
@@ -109,8 +104,7 @@ export function ListScreen({
 
       setShowSuggestions(false);
       setQuery("");
-      const qty = parseQty(addQty, 1);
-      setAddQty("");
+      const qty = 1;
 
       try {
         if (oneOff) {
@@ -134,7 +128,25 @@ export function ListScreen({
         );
       }
     },
-    [query, addQty, toast],
+    [query, toast],
+  );
+
+  /** Commits the quantity typed on a row. Blank clears it back to unspecified. */
+  const handleSaveQty = useCallback(
+    async (id: string) => {
+      const raw = qtyDraft.trim();
+      const qty = raw === "" ? null : parseQty(raw, 1);
+      setEditingId(null);
+
+      setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, qty } : e)));
+      try {
+        await api.updateListEntry(id, { qty });
+      } catch {
+        toast("Couldn't save the quantity", "error");
+        fetchAll();
+      }
+    },
+    [qtyDraft, toast, fetchAll],
   );
 
   const handleDelete = useCallback(
@@ -197,16 +209,6 @@ export function ListScreen({
             className="flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
           />
 
-          {/* Quantity rides along with whichever add path is taken. Blank means
-              one, so the common case needs no interaction at all. */}
-          <input
-            value={addQty}
-            onChange={(e) => setAddQty(e.target.value)}
-            inputMode="decimal"
-            placeholder="qty"
-            aria-label="Quantity"
-            className="w-12 shrink-0 bg-transparent text-sm text-text text-right outline-none placeholder:text-text-tertiary"
-          />
         </div>
 
         {/* Suggestions dropdown */}
@@ -282,15 +284,48 @@ export function ListScreen({
                       key={entry.id}
                       className="flex items-center gap-3 px-3 py-2.5 card-row"
                     >
-                      <div className="flex-1 min-w-0">
+                      {/* Tapping the row reveals its quantity. Kept off the add
+                          bar so adding stays one field and one keystroke, and
+                          the amount is set on the thing it belongs to. */}
+                      <button
+                        onClick={() => {
+                          setEditingId(entry.id);
+                          setQtyDraft(entry.qty === null ? "" : String(entry.qty));
+                        }}
+                        className="flex-1 min-w-0 text-left"
+                      >
                         <span className="text-sm font-medium text-text">{entry.displayName}</span>
-                        {entry.qty && (
-                          <span className="text-xs text-text-tertiary ml-2">×{entry.qty}</span>
+                        {entry.qty !== null && editingId !== entry.id && (
+                          <span className="numeral text-xs text-text-tertiary ml-2">
+                            ×{entry.qty}
+                          </span>
                         )}
                         {entry.note && (
-                          <p className="text-xs text-text-tertiary mt-0.5 truncate">{entry.note}</p>
+                          <span className="block text-xs text-text-tertiary mt-0.5 truncate">
+                            {entry.note}
+                          </span>
                         )}
-                      </div>
+                      </button>
+
+                      {editingId === entry.id && (
+                        <span className="flex items-center gap-1 shrink-0 bg-surface-sunken rounded-lg px-2 py-1">
+                          <span className="text-text-tertiary text-xs">×</span>
+                          <input
+                            autoFocus
+                            value={qtyDraft}
+                            onChange={(e) => setQtyDraft(e.target.value)}
+                            onBlur={() => handleSaveQty(entry.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveQty(entry.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            inputMode="decimal"
+                            placeholder="1"
+                            aria-label={`Quantity for ${entry.displayName}`}
+                            className="w-10 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
+                          />
+                        </span>
+                      )}
                       <button
                         onClick={() => handleDelete(entry.id)}
                         className="shrink-0 w-7 h-7 rounded-full text-text-tertiary hover:text-danger hover:bg-danger-bg flex items-center justify-center transition-colors"
