@@ -105,3 +105,60 @@ export interface ApiError {
   error: string;
   message: string;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Insights                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** How much of one item the household actually gets through. */
+export interface ItemUsage {
+  itemId: string;
+  name: string;
+  unit: string;
+  categoryId: string | null;
+  /** Number of times bought. */
+  purchases: number;
+  /** Total quantity bought, in the item's own unit. */
+  totalQty: number;
+  /** Total recorded spend in minor units; 0 when no purchase carried a price. */
+  totalSpend: number;
+  firstPurchaseAt: number;
+  lastPurchaseAt: number;
+  /** Quantity per 30 days, once there is enough history to divide by. */
+  qtyPerMonth: number | null;
+  /** Median days between purchases; null until there are 3 purchases. */
+  medianGapDays: number | null;
+}
+
+export interface CategorySpend {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  spend: number;
+  purchases: number;
+}
+
+/** One bar in the spend chart, at whichever cadence is selected. */
+export interface SpendBucket {
+  /** 'YYYY-MM' for months, or the Monday's 'YYYY-MM-DD' for weeks. */
+  key: string;
+  /** Short label for the axis, e.g. 'Jul' or '21 Jul'. */
+  label: string;
+  spend: number;
+  purchases: number;
+}
+
+export interface InsightsResponse {
+  /** Whether any purchase has ever been recorded. */
+  hasData: boolean;
+  totalPurchases: number;
+  /** Purchases that carried a price; the rest are excluded from spend totals. */
+  pricedPurchases: number;
+  totalSpend: number;
+  spendLast30: number;
+  purchasesLast30: number;
+  byCategory: CategorySpend[];
+  byMonth: SpendBucket[];
+  byWeek: SpendBucket[];
+  topItems: ItemUsage[];
+}

@@ -6,6 +6,7 @@ import type {
   ListEntry,
   Purchase,
   ApiError,
+  InsightsResponse,
 } from "@shared/types";
 
 /* ------------------------------------------------------------------ */
@@ -76,6 +77,8 @@ export const setProfilePasscode = (passcode: string | null, currentPasscode?: st
     passcode,
     currentPasscode,
   });
+
+export const getInsights = () => request<InsightsResponse>("GET", "/insights");
 
 export const logout = () => request<{ ok: true }>("POST", "/logout");
 
