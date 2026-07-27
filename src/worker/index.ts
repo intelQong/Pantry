@@ -2,12 +2,18 @@ import { Hono } from "hono";
 import type { AppEnv, Env } from "./env";
 import { loadSession } from "./middleware";
 import auth from "./routes/auth";
+import items from "./routes/items";
+import list from "./routes/list";
+import purchases from "./routes/purchases";
 
 const app = new Hono<AppEnv>().basePath("/api");
 
 app.use("*", loadSession);
 
 app.route("/", auth);
+app.route("/", items);
+app.route("/", list);
+app.route("/", purchases);
 
 app.get("/health", (c) => c.json({ ok: true }));
 
