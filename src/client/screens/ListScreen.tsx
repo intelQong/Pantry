@@ -82,19 +82,50 @@ export function ListScreen({
   // Takes an explicit name for the catalogue suggestions: setQuery hasn't
   // flushed by the time the handler runs, so reading state would add the
   // half-typed query instead of the suggestion that was tapped.
-  const handleAddCustom = useCallback(async (override?: string) => {
-    const name = (override ?? query).trim();
-    if (!name) return;
-    setShowSuggestions(false);
-    setQuery("");
-    try {
-      const entry = await api.addToList({ customName: name });
-      setEntries((prev) => [...prev, entry]);
-      toast("Added to list");
-    } catch {
-      toast("Failed to add", "error");
-    }
-  }, [query, toast]);
+  /**
+   * Adds a name that isn't yet a pantry item.
+   *
+   * Creates the item first, then puts *that* on the list. Free text used to be
+   * the default here, which was a quiet trap: a free-text entry has no item_id,
+   * so buying it records no purchase, never updates last_purchased_at, and
+   * never reaches Pantry or Insights. Everything typed straight into this box
+   * vanished the moment it was ticked off.
+   *
+   * `oneOff` keeps the old behaviour for things genuinely not worth tracking,
+   * but it now has to be asked for rather than being what happens by default.
+   */
+  const handleAddCustom = useCallback(
+    async (override?: string, oneOff = false) => {
+      const name = (override ?? query).trim();
+      if (!name) return;
+
+      setShowSuggestions(false);
+      setQuery("");
+
+      try {
+        if (oneOff) {
+          const entry = await api.addToList({ customName: name });
+          setEntries((prev) => [...prev, entry]);
+          toast(`${name} added just this once`);
+          return;
+        }
+
+        const item = await api.createItem({ name, isStaple: true });
+        const entry = await api.addToList({ itemId: item.id });
+        setEntries((prev) => [...prev, entry]);
+        setItems((prev) => [...prev, item as (typeof prev)[number]]);
+        toast(`${name} added and now tracked`);
+      } catch (err) {
+        // The usual failure is a name that already exists in the pantry, which
+        // the API rejects on its unique index. Say which, rather than "failed".
+        toast(
+          err instanceof api.ApiRequestError ? err.body.message : `Couldn't add ${name}`,
+          "error",
+        );
+      }
+    },
+    [query, toast],
+  );
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -188,10 +219,19 @@ export function ListScreen({
 
             {query.trim() && (
               <button
+                onClick={() => handleAddCustom(undefined, true)}
+                className="w-full text-left px-4 py-2 text-xs text-text-tertiary hover:bg-surface-sunken transition-colors border-t border-border-subtle"
+              >
+                Just this once — don't track it
+              </button>
+            )}
+
+            {query.trim() && (
+              <button
                 onClick={() => handleAddCustom()}
                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-accent-600 hover:bg-surface-sunken transition-colors border-t border-border-subtle"
               >
-                Add "{query.trim()}" as custom item
+                Add "{query.trim()}" to the pantry
               </button>
             )}
           </div>
