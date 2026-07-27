@@ -50,14 +50,32 @@ export interface SessionResponse {
 
 export const getSession = () => request<SessionResponse>("GET", "/session");
 
-export const setup = (householdName: string, passcode: string, memberNames: string[]) =>
-  request<{ ok: true; householdId: string }>("POST", "/setup", { householdName, passcode, memberNames });
+export const setup = (
+  householdName: string,
+  passcode: string,
+  memberNames: string[],
+  adminPasscode?: string,
+) =>
+  request<{ ok: true; householdId: string }>("POST", "/setup", {
+    householdName,
+    passcode,
+    memberNames,
+    adminPasscode,
+  });
 
 export const login = (passcode: string) =>
   request<{ ok: true }>("POST", "/login", { passcode });
 
-export const pickProfile = (memberId: string) =>
-  request<{ ok: true }>("POST", "/profile", { memberId });
+/** `adminPasscode` is required only for profiles that have one set. */
+export const pickProfile = (memberId: string, adminPasscode?: string) =>
+  request<{ ok: true }>("POST", "/profile", { memberId, adminPasscode });
+
+/** Sets, changes, or (with an empty passcode) removes the caller's profile lock. */
+export const setProfilePasscode = (passcode: string | null, currentPasscode?: string) =>
+  request<{ ok: true; hasAdminPasscode: boolean }>("POST", "/profile/passcode", {
+    passcode,
+    currentPasscode,
+  });
 
 export const logout = () => request<{ ok: true }>("POST", "/logout");
 
@@ -79,6 +97,7 @@ export const createItem = (data: {
   brand?: string | null;
   notes?: string | null;
   isStaple?: boolean;
+  defaultPrice?: number | null;
   restockIntervalDays?: number;
   intervalLocked?: boolean;
 }) => request<Item>("POST", "/items", data);
@@ -91,6 +110,7 @@ export const updateItem = (id: string, data: Partial<{
   brand: string | null;
   notes: string | null;
   isStaple: boolean;
+  defaultPrice: number | null;
   restockIntervalDays: number;
   intervalLocked: boolean;
 }>) => request<Item>("PATCH", `/items/${id}`, data);

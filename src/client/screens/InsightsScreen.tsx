@@ -49,7 +49,7 @@ export function InsightsScreen() {
       )}
 
       <EmptyState
-        icon="📊"
+        icon="arrowUp"
         title="Full insights coming soon"
         subtitle="Consumption rhythms, monthly spend, spend by category, and price trends — all from your purchase history."
       />

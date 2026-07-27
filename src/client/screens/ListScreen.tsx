@@ -170,7 +170,7 @@ export function ListScreen({
 
       {entries.length === 0 ? (
         <EmptyState
-          icon="📋"
+          icon="basket"
           title="List is empty"
           subtitle="Add items from Today or type something above"
         />

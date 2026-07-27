@@ -10,6 +10,10 @@ export interface Member {
   id: string;
   name: string;
   accentColor: string;
+  /** Superadmin profiles require a second passcode to switch into. */
+  isAdmin: boolean;
+  /** True once that second passcode has actually been set. */
+  hasAdminPasscode: boolean;
 }
 
 export interface Category {
@@ -28,6 +32,8 @@ export interface Item {
   brand: string | null;
   notes: string | null;
   isStaple: boolean;
+  /** What it usually costs, in minor units (poisha). null = never recorded. */
+  defaultPrice: number | null;
   restockIntervalDays: number;
   intervalLocked: boolean;
   lastPurchasedAt: number | null;

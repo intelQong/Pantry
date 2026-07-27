@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Category, Purchase } from "@shared/types";
 import * as api from "../api";
+import { parseMoney, toInputValue, formatMoney, CURRENCY_SYMBOL } from "../lib/money";
+import { Icon } from "./Icon";
 import { BottomSheet } from "../components/BottomSheet";
 import { useToast } from "../components/Toast";
 
@@ -33,6 +35,7 @@ export function ItemDetailSheet({
   const [interval, setInterval] = useState(7);
   const [locked, setLocked] = useState(false);
   const [isStaple, setIsStaple] = useState(true);
+  const [price, setPrice] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -53,6 +56,7 @@ export function ItemDetailSheet({
         setInterval(found.restockIntervalDays);
         setLocked(found.intervalLocked);
         setIsStaple(found.isStaple);
+        setPrice(toInputValue(found.defaultPrice));
       }
       setPurchases(history);
     };
@@ -72,6 +76,7 @@ export function ItemDetailSheet({
         restockIntervalDays: interval,
         intervalLocked: locked,
         isStaple,
+        defaultPrice: parseMoney(price),
       });
       toast("Item updated");
       setEditing(false);
@@ -142,6 +147,24 @@ export function ItemDetailSheet({
               />
             </label>
           </div>
+
+          <label className="block">
+            <span className="text-xs font-medium text-text-secondary">
+              Usual price <span className="text-text-tertiary font-normal">· optional</span>
+            </span>
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-tertiary pointer-events-none">
+                {CURRENCY_SYMBOL}
+              </span>
+              <input
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                inputMode="decimal"
+                className="w-full pl-7 pr-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-400"
+                placeholder="0"
+              />
+            </div>
+          </label>
 
           <label className="block">
             <span className="text-xs font-medium text-text-secondary">Brand</span>
@@ -222,13 +245,28 @@ export function ItemDetailSheet({
             {item.brand && (
               <p className="text-sm text-text-secondary">{item.brand}</p>
             )}
-            <div className="flex flex-wrap gap-2 text-xs text-text-tertiary">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-tertiary">
               <span>{item.unit} × {item.defaultQty}</span>
-              <span>•</span>
+              <span aria-hidden="true">•</span>
               <span>Every {item.restockIntervalDays} days</span>
-              {item.intervalLocked && <span>🔒</span>}
-              {!item.isStaple && <span>• Not a staple</span>}
+              {item.intervalLocked && (
+                <Icon name="lock" className="w-3.5 h-3.5" />
+              )}
+              {!item.isStaple && (
+                <>
+                  <span aria-hidden="true">•</span>
+                  <span>Not a staple</span>
+                </>
+              )}
             </div>
+
+            {item.defaultPrice !== null && (
+              <p className="inline-flex items-center gap-1.5 text-sm font-medium text-text">
+                <Icon name="tag" className="w-4 h-4 text-text-tertiary" />
+                {formatMoney(item.defaultPrice)}
+                <span className="text-xs font-normal text-text-tertiary">usually</span>
+              </p>
+            )}
             {item.notes && (
               <p className="text-sm text-text-secondary bg-surface-sunken rounded-lg px-3 py-2 mt-2">{item.notes}</p>
             )}

@@ -3,6 +3,7 @@ import type { Member } from "@shared/types";
 import * as api from "../api";
 import { useToast } from "../components/Toast";
 import { usePushSubscription } from "../hooks/usePushSubscription";
+import { Icon } from "../components/Icon";
 
 export function SettingsScreen({
   currentMemberId,
@@ -50,17 +51,65 @@ export function SettingsScreen({
     localStorage.setItem("pantry-theme", t);
   }, []);
 
+  // A protected profile is challenged inline rather than switched straight into.
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [challengeCode, setChallengeCode] = useState("");
+  const [challengeError, setChallengeError] = useState("");
+
   const handleSwitchProfile = useCallback(
-    async (memberId: string) => {
+    async (member: Member, adminPasscode?: string) => {
+      if (member.hasAdminPasscode && !adminPasscode) {
+        setChallengeId(member.id);
+        setChallengeCode("");
+        setChallengeError("");
+        return;
+      }
       try {
-        await api.pickProfile(memberId);
-        toast("Profile switched");
+        await api.pickProfile(member.id, adminPasscode);
+        setChallengeId(null);
+        toast(`Switched to ${member.name}`);
         onRefresh();
-      } catch {
-        toast("Failed to switch", "error");
+      } catch (err) {
+        if (member.hasAdminPasscode) {
+          setChallengeError(
+            err instanceof api.ApiRequestError ? err.body.message : "Couldn't switch",
+          );
+          setChallengeCode("");
+        } else {
+          toast("Couldn't switch profile", "error");
+        }
       }
     },
     [toast, onRefresh],
+  );
+
+  // Profile lock, for the member currently signed in on this device.
+  const [lockOpen, setLockOpen] = useState(false);
+  const [newCode, setNewCode] = useState("");
+  const [currentCode, setCurrentCode] = useState("");
+  const [lockError, setLockError] = useState("");
+  const [lockBusy, setLockBusy] = useState(false);
+  const hasLock = currentMember?.hasAdminPasscode ?? false;
+
+  const handleSaveLock = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setLockBusy(true);
+      setLockError("");
+      try {
+        await api.setProfilePasscode(newCode || null, currentCode || undefined);
+        toast(newCode ? "Profile locked" : "Profile lock removed");
+        setLockOpen(false);
+        setNewCode("");
+        setCurrentCode("");
+        onRefresh();
+      } catch (err) {
+        setLockError(err instanceof api.ApiRequestError ? err.body.message : "Couldn't save");
+      } finally {
+        setLockBusy(false);
+      }
+    },
+    [newCode, currentCode, toast, onRefresh],
   );
 
   const handleLogout = useCallback(async () => {
@@ -71,14 +120,14 @@ export function SettingsScreen({
   return (
     <div className="safe-top">
       <header className="px-5 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-text">Settings</h1>
+        <h1 className="font-display text-[1.75rem] font-semibold text-text">Settings</h1>
         <p className="text-sm text-text-secondary mt-0.5">{householdName}</p>
       </header>
 
       <div className="px-4 space-y-4 pb-8">
         {/* Current profile */}
         <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+          <h3 className="eyebrow text-text-tertiary mb-3">
             Profile
           </h3>
           <div className="flex items-center gap-3 mb-3">
@@ -100,27 +149,136 @@ export function SettingsScreen({
               {members
                 .filter((m) => m.id !== currentMemberId)
                 .map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleSwitchProfile(m.id)}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-sunken transition-colors"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                      style={{ backgroundColor: m.accentColor }}
+                  <div key={m.id}>
+                    <button
+                      onClick={() => handleSwitchProfile(m)}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-sunken transition-colors"
                     >
-                      {m.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="text-sm text-text">{m.name}</span>
-                  </button>
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm"
+                        style={{ backgroundColor: m.accentColor }}
+                      >
+                        {m.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="flex-1 text-sm text-text">{m.name}</span>
+                      {m.hasAdminPasscode && (
+                        <Icon name="lock" className="w-3.5 h-3.5 text-text-tertiary" />
+                      )}
+                    </button>
+
+                    {challengeId === m.id && (
+                      <form
+                        className="px-3 pb-2 pt-1"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (challengeCode) handleSwitchProfile(m, challengeCode);
+                        }}
+                      >
+                        <input
+                          type="password"
+                          autoFocus
+                          value={challengeCode}
+                          onChange={(e) => {
+                            setChallengeCode(e.target.value);
+                            if (challengeError) setChallengeError("");
+                          }}
+                          placeholder={`${m.name}'s passcode`}
+                          autoComplete="off"
+                          aria-label={`Passcode for ${m.name}`}
+                          className={`w-full px-3 py-2 rounded-xl bg-surface-sunken border text-sm
+                            text-text outline-none transition-colors ${
+                              challengeError ? "border-danger" : "border-border focus:border-accent-400"
+                            }`}
+                        />
+                        {challengeError && (
+                          <p className="text-xs text-danger mt-1.5" role="alert">
+                            {challengeError}
+                          </p>
+                        )}
+                      </form>
+                    )}
+                  </div>
                 ))}
             </div>
           )}
         </section>
 
+        {/* Profile lock */}
+        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+          <h3 className="eyebrow text-text-tertiary mb-3">Profile lock</h3>
+
+          <p className="text-sm text-text-secondary">
+            {hasLock
+              ? `Switching into ${currentMember?.name ?? "this profile"} needs its own passcode, on top of the household one.`
+              : "Add a second passcode so only you can switch into this profile, even from a phone that already knows the household passcode."}
+          </p>
+
+          {!lockOpen ? (
+            <button
+              onClick={() => setLockOpen(true)}
+              className="w-full mt-3 py-2.5 rounded-xl bg-surface-sunken text-text-secondary text-sm font-medium hover:text-text transition-colors"
+            >
+              {hasLock ? "Change or remove passcode" : "Lock this profile"}
+            </button>
+          ) : (
+            <form onSubmit={handleSaveLock} className="mt-3 space-y-2">
+              {hasLock && (
+                <input
+                  type="password"
+                  autoFocus
+                  value={currentCode}
+                  onChange={(e) => setCurrentCode(e.target.value)}
+                  placeholder="Current passcode"
+                  autoComplete="off"
+                  aria-label="Current profile passcode"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-400"
+                />
+              )}
+              <input
+                type="password"
+                autoFocus={!hasLock}
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                placeholder={hasLock ? "New passcode (empty to remove)" : "New passcode"}
+                autoComplete="new-password"
+                aria-label="New profile passcode"
+                className="w-full px-3 py-2 rounded-xl bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-400"
+              />
+
+              {lockError && (
+                <p className="text-xs text-danger" role="alert">
+                  {lockError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLockOpen(false);
+                    setLockError("");
+                    setNewCode("");
+                    setCurrentCode("");
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-surface-sunken text-sm font-medium text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={lockBusy || (hasLock && !currentCode)}
+                  className="flex-1 py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  {lockBusy ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
+
         {/* Theme */}
         <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+          <h3 className="eyebrow text-text-tertiary mb-3">
             Appearance
           </h3>
           <div className="flex gap-2">
@@ -142,7 +300,7 @@ export function SettingsScreen({
 
         {/* Notifications */}
         <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+          <h3 className="eyebrow text-text-tertiary mb-3">
             Notifications
           </h3>
 
@@ -171,8 +329,9 @@ export function SettingsScreen({
             </p>
           ) : pushState === "subscribed" ? (
             <div className="space-y-3">
-              <p className="text-sm text-text-secondary">
-                ✓ Reminders are on for this device.
+              <p className="flex items-center gap-1.5 text-sm text-text-secondary">
+                <Icon name="check" className="w-4 h-4 text-status-ok" strokeWidth={2.5} />
+                Reminders are on for this device.
               </p>
               <button
                 onClick={handleTestPush}
@@ -200,7 +359,7 @@ export function SettingsScreen({
 
         {/* Coming soon */}
         <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
+          <h3 className="eyebrow text-text-tertiary mb-2">
             More Settings
           </h3>
           <p className="text-sm text-text-tertiary">
@@ -217,7 +376,7 @@ export function SettingsScreen({
         </button>
 
         <p className="text-center text-xs text-text-tertiary pt-2">
-          Pantry v0.1.0 — built by Antigravity
+          Pantry v0.1.0
         </p>
       </div>
     </div>

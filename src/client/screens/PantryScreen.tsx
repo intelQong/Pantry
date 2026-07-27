@@ -75,7 +75,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
 
       {filtered.length === 0 ? (
         <EmptyState
-          icon="📦"
+          icon="box"
           title={search ? "No matches" : "No items yet"}
           subtitle={search ? "Try a different search" : "Add your first pantry item"}
           action={
@@ -158,6 +158,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
       )}
       <AddItemSheet
         categories={categories}
+        existingNames={items.map((i) => i.name)}
         open={showAdd}
         onClose={() => setShowAdd(false)}
         onAdded={fetchItems}

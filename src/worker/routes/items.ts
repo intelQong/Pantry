@@ -10,6 +10,16 @@ const items = new Hono<AppEnv>();
 /** How far ahead of due an item starts showing as due_soon, absent a member profile. */
 const DEFAULT_LEAD_DAYS = 2;
 
+/**
+ * default_price is minor units (poisha), so it must be a non-negative integer.
+ * Rejecting floats here is what keeps 12.5 poisha from ever reaching the
+ * database and quietly breaking every total downstream.
+ */
+function isValidPrice(value: unknown): value is number | null | undefined {
+  if (value === undefined || value === null) return true;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 interface ItemRow {
   id: string;
   name: string;
@@ -19,6 +29,7 @@ interface ItemRow {
   brand: string | null;
   notes: string | null;
   is_staple: number;
+  default_price: number | null;
   restock_interval_days: number;
   interval_locked: number;
   last_purchased_at: number | null;
@@ -36,6 +47,7 @@ function toItem(row: ItemRow): Item {
     brand: row.brand,
     notes: row.notes,
     isStaple: row.is_staple === 1,
+    defaultPrice: row.default_price,
     restockIntervalDays: row.restock_interval_days,
     intervalLocked: row.interval_locked === 1,
     lastPurchasedAt: row.last_purchased_at,
@@ -49,7 +61,8 @@ function toItemWithStatus(row: ItemRow, leadDays: number, now: number, onList: b
 }
 
 const ITEM_COLUMNS = `id, name, category_id, unit, default_qty, brand, notes, is_staple,
-            restock_interval_days, interval_locked, last_purchased_at, archived, created_at`;
+            default_price, restock_interval_days, interval_locked, last_purchased_at,
+            archived, created_at`;
 
 /** The item ids currently sitting on the household's pending shop list. */
 async function pendingItemIds(db: D1Database, householdId: string): Promise<Set<string>> {
@@ -125,6 +138,7 @@ items.post("/items", requireMember, async (c) => {
     brand?: string | null;
     notes?: string | null;
     isStaple?: boolean;
+    defaultPrice?: number | null;
     restockIntervalDays?: number;
     intervalLocked?: boolean;
   }>();
@@ -132,6 +146,13 @@ items.post("/items", requireMember, async (c) => {
   const name = body.name?.trim();
   if (!name) {
     return c.json({ error: "missing_name", message: "An item needs a name." }, 400);
+  }
+
+  if (!isValidPrice(body.defaultPrice)) {
+    return c.json(
+      { error: "invalid_price", message: "Price must be a whole number of poisha, or empty." },
+      400,
+    );
   }
 
   if (body.categoryId) {
@@ -152,8 +173,9 @@ items.post("/items", requireMember, async (c) => {
     await c.env.DB.prepare(
       `INSERT INTO item (
          id, household_id, name, category_id, unit, default_qty, brand, notes,
-         is_staple, restock_interval_days, interval_locked, created_by, created_at
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         is_staple, default_price, restock_interval_days, interval_locked,
+         created_by, created_at
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
       .bind(
         id,
@@ -165,6 +187,7 @@ items.post("/items", requireMember, async (c) => {
         body.brand?.trim() || null,
         body.notes?.trim() || null,
         body.isStaple === false ? 0 : 1,
+        body.defaultPrice ?? null,
         Number.isInteger(body.restockIntervalDays) && body.restockIntervalDays! > 0
           ? body.restockIntervalDays
           : 7,
@@ -211,9 +234,17 @@ items.patch("/items/:id", requireSession, async (c) => {
     brand?: string | null;
     notes?: string | null;
     isStaple?: boolean;
+    defaultPrice?: number | null;
     restockIntervalDays?: number;
     intervalLocked?: boolean;
   }>();
+
+  if (!isValidPrice(body.defaultPrice)) {
+    return c.json(
+      { error: "invalid_price", message: "Price must be a whole number of poisha, or empty." },
+      400,
+    );
+  }
 
   if (body.categoryId) {
     const category = await c.env.DB.prepare(
@@ -246,6 +277,7 @@ items.patch("/items/:id", requireSession, async (c) => {
   if (body.brand !== undefined) set("brand", body.brand?.trim() || null);
   if (body.notes !== undefined) set("notes", body.notes?.trim() || null);
   if (body.isStaple !== undefined) set("is_staple", body.isStaple ? 1 : 0);
+  if (body.defaultPrice !== undefined) set("default_price", body.defaultPrice);
   if (body.restockIntervalDays !== undefined) set("restock_interval_days", body.restockIntervalDays);
   if (body.intervalLocked !== undefined) set("interval_locked", body.intervalLocked ? 1 : 0);
 

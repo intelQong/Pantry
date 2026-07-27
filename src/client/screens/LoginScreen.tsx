@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import * as api from "../api";
+import { BrandMark } from "../components/BrandMark";
 
 export function LoginScreen({
   householdName,
@@ -11,11 +12,17 @@ export function LoginScreen({
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!passcode) return;
+      if (!passcode || loading) return;
+
       setError("");
       setLoading(true);
       try {
@@ -24,49 +31,64 @@ export function LoginScreen({
       } catch (err) {
         setError(err instanceof api.ApiRequestError ? err.body.message : "Something went wrong.");
         setPasscode("");
+        inputRef.current?.focus();
       } finally {
         setLoading(false);
       }
     },
-    [passcode, onDone],
+    [passcode, loading, onDone],
   );
 
   return (
-    <div className="min-h-dvh flex items-center justify-center p-6 bg-surface">
-      <div className="w-full max-w-sm animate-fade-in">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-accent mb-4">
-            <span className="text-3xl">🔒</span>
-          </div>
-          <h1 className="text-2xl font-bold text-text">{householdName}</h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Enter the household passcode
-          </p>
+    <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-surface">
+      <div className="w-full max-w-[19rem] animate-fade-in">
+        <div className="flex flex-col items-center text-center mb-9">
+          <BrandMark className="w-12 h-12 text-accent-500 mb-5" />
+          <h1 className="font-display text-[2rem] leading-none font-semibold text-text">Pantry</h1>
+          <p className="text-sm text-text-secondary mt-2.5">{householdName}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="passcode" className="sr-only">
+            Household passcode
+          </label>
           <input
+            ref={inputRef}
+            id="passcode"
             type="password"
             value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-            autoFocus
+            onChange={(e) => {
+              setPasscode(e.target.value);
+              if (error) setError("");
+            }}
+            placeholder="Passcode"
             autoComplete="current-password"
-            className="w-full px-3.5 py-3 rounded-xl bg-surface-sunken border border-border text-text text-center text-lg tracking-widest outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 transition-all"
-            placeholder="••••"
+            aria-invalid={error ? true : undefined}
+            className={`w-full text-center tracking-[0.35em] text-lg px-4 py-3.5 rounded-2xl
+              bg-surface-raised border text-text placeholder:tracking-normal
+              placeholder:text-text-tertiary placeholder:text-base outline-none
+              transition-colors ${error ? "border-danger" : "border-border focus:border-accent-400"}`}
           />
 
-          {error && (
-            <p className="text-sm text-danger bg-danger-bg rounded-lg px-3 py-2">{error}</p>
-          )}
+          {/* Reserved height, so the layout doesn't jump when an error appears. */}
+          <p className="h-5 mt-2 text-center text-xs text-danger" role="alert">
+            {error}
+          </p>
 
           <button
             type="submit"
             disabled={loading || !passcode}
-            className="w-full py-3 rounded-xl gradient-accent text-text-on-accent font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-50"
+            className="w-full mt-1 py-3.5 rounded-2xl bg-accent-500 text-text-on-accent
+              font-semibold text-sm shadow-sm hover:bg-accent-600 active:scale-[0.99]
+              transition-all disabled:opacity-40 disabled:pointer-events-none"
           >
-            {loading ? "Unlocking…" : "Unlock"}
+            {loading ? "Checking…" : "Unlock"}
           </button>
         </form>
+
+        <p className="text-center text-xs text-text-tertiary mt-8">
+          Shared by everyone in the household
+        </p>
       </div>
     </div>
   );

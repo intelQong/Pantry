@@ -2,55 +2,65 @@
 
 /* ------------------------------------------------------------------ */
 /* Theme tokens — Tailwind 4 CSS-first config                         */
+/*                                                                     */
+/* Palette follows Claude's: a warm clay accent on paper-cream         */
+/* surfaces, with near-black warm greys for text. Everything is stated */
+/* in OKLCH so the ramps stay perceptually even and the dark theme can */
+/* reuse the same hues at different lightness without going muddy.     */
 /* ------------------------------------------------------------------ */
 @theme {
-  /* Accent palette — indigo default */
-  --color-accent-50:  oklch(0.97 0.02 277);
-  --color-accent-100: oklch(0.94 0.04 277);
-  --color-accent-200: oklch(0.87 0.08 277);
-  --color-accent-300: oklch(0.78 0.13 277);
-  --color-accent-400: oklch(0.67 0.17 277);
-  --color-accent-500: oklch(0.59 0.20 277);
-  --color-accent-600: oklch(0.52 0.20 277);
-  --color-accent-700: oklch(0.46 0.18 277);
-  --color-accent-800: oklch(0.39 0.15 277);
-  --color-accent-900: oklch(0.33 0.12 277);
-  --color-accent-950: oklch(0.24 0.09 277);
+  /* Accent — Claude clay. 500 is the brand tone; the ramp is built
+     around it rather than generated, so 50/100 stay warm rather than
+     drifting pink the way a naive tint would. */
+  --color-accent-50:  oklch(0.972 0.013 45);
+  --color-accent-100: oklch(0.942 0.028 45);
+  --color-accent-200: oklch(0.888 0.050 44);
+  --color-accent-300: oklch(0.818 0.079 43);
+  --color-accent-400: oklch(0.746 0.107 42);
+  --color-accent-500: oklch(0.681 0.128 41);
+  --color-accent-600: oklch(0.606 0.126 39);
+  --color-accent-700: oklch(0.525 0.111 37);
+  --color-accent-800: oklch(0.447 0.092 36);
+  --color-accent-900: oklch(0.376 0.074 35);
+  --color-accent-950: oklch(0.262 0.050 34);
 
-  /* Semantic surface colours */
-  --color-surface:          oklch(0.99 0.00 0);
-  --color-surface-raised:   oklch(1.00 0.00 0);
-  --color-surface-overlay:  oklch(0.97 0.00 0);
-  --color-surface-sunken:   oklch(0.95 0.01 277);
-  --color-border:           oklch(0.90 0.01 277);
-  --color-border-subtle:    oklch(0.94 0.01 277);
-  --color-text:             oklch(0.15 0.01 277);
-  --color-text-secondary:   oklch(0.45 0.02 277);
-  --color-text-tertiary:    oklch(0.60 0.01 277);
-  --color-text-on-accent:   oklch(1.00 0.00 0);
+  /* Surfaces — paper cream, not white. Cards lift to true white so the
+     hierarchy reads without needing heavy shadows. */
+  --color-surface:          oklch(0.980 0.006 85);
+  --color-surface-raised:   oklch(1.000 0.000 0);
+  --color-surface-overlay:  oklch(0.965 0.008 85);
+  --color-surface-sunken:   oklch(0.940 0.012 85);
+  --color-border:           oklch(0.882 0.013 80);
+  --color-border-subtle:    oklch(0.925 0.010 82);
+  --color-text:             oklch(0.220 0.006 60);
+  --color-text-secondary:   oklch(0.455 0.012 60);
+  --color-text-tertiary:    oklch(0.605 0.012 60);
+  --color-text-on-accent:   oklch(1.000 0.000 0);
 
-  /* Status colours */
-  --color-status-overdue:   oklch(0.63 0.21 25);
-  --color-status-due:       oklch(0.75 0.16 75);
-  --color-status-due-soon:  oklch(0.82 0.12 90);
-  --color-status-ok:        oklch(0.72 0.17 155);
+  /* Status — pulled toward the warm end of each hue so they sit in the
+     same world as the clay accent instead of looking bolted on. */
+  --color-status-overdue:   oklch(0.585 0.170 28);
+  --color-status-due:       oklch(0.720 0.140 66);
+  --color-status-due-soon:  oklch(0.800 0.100 88);
+  --color-status-ok:        oklch(0.650 0.115 152);
 
-  --color-status-overdue-bg: oklch(0.94 0.04 25);
-  --color-status-due-bg:     oklch(0.95 0.04 75);
-  --color-status-due-soon-bg: oklch(0.96 0.03 90);
-  --color-status-ok-bg:      oklch(0.95 0.04 155);
+  --color-status-overdue-bg:  oklch(0.945 0.030 28);
+  --color-status-due-bg:      oklch(0.955 0.030 66);
+  --color-status-due-soon-bg: oklch(0.962 0.025 88);
+  --color-status-ok-bg:       oklch(0.950 0.030 152);
 
   /* Feedback */
-  --color-danger:     oklch(0.63 0.21 25);
-  --color-danger-bg:  oklch(0.94 0.04 25);
-  --color-success:    oklch(0.72 0.17 155);
-  --color-success-bg: oklch(0.95 0.04 155);
+  --color-danger:     oklch(0.585 0.170 28);
+  --color-danger-bg:  oklch(0.945 0.030 28);
+  --color-success:    oklch(0.650 0.115 152);
+  --color-success-bg: oklch(0.950 0.030 152);
 
-  /* Shadows */
-  --shadow-sm:  0 1px 2px oklch(0 0 0 / 0.04);
-  --shadow-md:  0 4px 12px oklch(0 0 0 / 0.07);
-  --shadow-lg:  0 8px 24px oklch(0 0 0 / 0.10);
-  --shadow-xl:  0 16px 48px oklch(0 0 0 / 0.14);
+  /* Shadows — warm-tinted rather than neutral black, so cards sit on the
+     cream instead of punching a grey hole in it. */
+  --shadow-sm:  0 1px 2px oklch(0.30 0.02 60 / 0.05);
+  --shadow-md:  0 4px 12px oklch(0.30 0.02 60 / 0.07);
+  --shadow-lg:  0 8px 24px oklch(0.30 0.02 60 / 0.10);
+  --shadow-xl:  0 16px 48px oklch(0.30 0.02 60 / 0.14);
 
   /* Radius */
   --radius-sm:  0.375rem;
@@ -59,17 +69,18 @@
   --radius-xl:  1.25rem;
   --radius-full: 9999px;
 
-  /* Typography
-     Inter carries body text; Space Grotesk carries headings, numerals and the
-     splash. Two families, not three -- the mono face a third role would want is
-     doing nothing Space Grotesk's tabular figures can't. */
-  --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Typography — Source Serif for anything that speaks (greetings, screen
+     titles, numbers that matter), Hanken Grotesk for anything that labels.
+     The serif is what stops this reading as another dashboard; it is used
+     sparingly so it keeps that weight. */
+  --font-family-sans: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
 
-  /* The splash yellow. Minecraft's #FFFF00 vibrates against a light surface and
-     fails contrast, so this is pulled down in lightness and slightly warmed --
-     recognisably the same joke, actually readable. */
-  --color-splash: oklch(0.72 0.16 85);
+  /* Splash gold. Held at hue 75 so it reads as a separate warm note next to
+     the clay accent at 41 rather than a muddy neighbour of it. Minecraft's
+     #FFFF00 vibrates on cream and fails contrast; this is the same joke,
+     legible. */
+  --color-splash: oklch(0.660 0.135 72);
 
   /* Animations */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -88,51 +99,15 @@
 /* ------------------------------------------------------------------ */
 /* Keyframes                                                           */
 /* ------------------------------------------------------------------ */
-@keyframes slide-up {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
-
-@keyframes slide-down {
-  from { transform: translateY(0);    opacity: 1; }
-  to   { transform: translateY(100%); opacity: 0; }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-@keyframes pop {
-  0%   { transform: scale(0.8); opacity: 0; }
-  60%  { transform: scale(1.05); }
-  100% { transform: scale(1);   opacity: 1; }
-}
-
-@keyframes check-pop {
-  0%   { transform: scale(0); }
-  50%  { transform: scale(1.3); }
-  100% { transform: scale(1); }
-}
-
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.6; }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes slide-up   { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slide-down { from { transform: translateY(0); opacity: 1; } to { transform: translateY(100%); opacity: 0; } }
+@keyframes fade-in    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out   { from { opacity: 1; } to { opacity: 0; } }
+@keyframes pop        { 0% { transform: scale(0.8); opacity: 0; } 60% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes check-pop  { 0% { transform: scale(0); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+@keyframes shimmer    { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes spin       { to { transform: rotate(360deg); } }
 
 /* The splash's pulse. Anchored at rotate(-4deg) so the tilt holds while only
    the scale moves -- the original bobs, it doesn't wobble. */
@@ -142,66 +117,68 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Dark mode                                                           */
+/* Dark mode — Claude's warm near-black, never pure #000              */
 /* ------------------------------------------------------------------ */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --color-surface:          oklch(0.16 0.02 277);
-    --color-surface-raised:   oklch(0.20 0.02 277);
-    --color-surface-overlay:  oklch(0.22 0.02 277);
-    --color-surface-sunken:   oklch(0.13 0.02 277);
-    --color-border:           oklch(0.28 0.02 277);
-    --color-border-subtle:    oklch(0.24 0.02 277);
-    --color-text:             oklch(0.93 0.01 277);
-    --color-text-secondary:   oklch(0.65 0.02 277);
-    --color-text-tertiary:    oklch(0.50 0.02 277);
+    --color-surface:          oklch(0.200 0.005 75);
+    --color-surface-raised:   oklch(0.242 0.006 75);
+    --color-surface-overlay:  oklch(0.272 0.006 75);
+    --color-surface-sunken:   oklch(0.162 0.004 75);
+    --color-border:           oklch(0.325 0.007 75);
+    --color-border-subtle:    oklch(0.282 0.006 75);
+    --color-text:             oklch(0.930 0.006 85);
+    --color-text-secondary:   oklch(0.680 0.011 80);
+    --color-text-tertiary:    oklch(0.525 0.009 80);
 
-    --color-status-overdue-bg: oklch(0.25 0.06 25);
-    --color-status-due-bg:     oklch(0.27 0.06 75);
-    --color-status-due-soon-bg: oklch(0.28 0.05 90);
-    --color-status-ok-bg:      oklch(0.25 0.06 155);
+    --color-status-overdue-bg:  oklch(0.270 0.055 28);
+    --color-status-due-bg:      oklch(0.285 0.050 66);
+    --color-status-due-soon-bg: oklch(0.295 0.042 88);
+    --color-status-ok-bg:       oklch(0.270 0.045 152);
 
-    --color-danger-bg:  oklch(0.25 0.06 25);
-    --color-success-bg: oklch(0.25 0.06 155);
+    --color-danger-bg:  oklch(0.270 0.055 28);
+    --color-success-bg: oklch(0.270 0.045 152);
 
-    --shadow-sm:  0 1px 2px oklch(0 0 0 / 0.20);
-    --shadow-md:  0 4px 12px oklch(0 0 0 / 0.30);
-    --shadow-lg:  0 8px 24px oklch(0 0 0 / 0.35);
-    --shadow-xl:  0 16px 48px oklch(0 0 0 / 0.45);
+    --color-splash: oklch(0.790 0.135 78);
+
+    --shadow-sm:  0 1px 2px oklch(0 0 0 / 0.24);
+    --shadow-md:  0 4px 12px oklch(0 0 0 / 0.32);
+    --shadow-lg:  0 8px 24px oklch(0 0 0 / 0.38);
+    --shadow-xl:  0 16px 48px oklch(0 0 0 / 0.48);
   }
 }
 
 .dark {
-  --color-surface:          oklch(0.16 0.02 277);
-  --color-surface-raised:   oklch(0.20 0.02 277);
-  --color-surface-overlay:  oklch(0.22 0.02 277);
-  --color-surface-sunken:   oklch(0.13 0.02 277);
-  --color-border:           oklch(0.28 0.02 277);
-  --color-border-subtle:    oklch(0.24 0.02 277);
-  --color-text:             oklch(0.93 0.01 277);
-  --color-text-secondary:   oklch(0.65 0.02 277);
-  --color-text-tertiary:    oklch(0.50 0.02 277);
+  --color-surface:          oklch(0.200 0.005 75);
+  --color-surface-raised:   oklch(0.242 0.006 75);
+  --color-surface-overlay:  oklch(0.272 0.006 75);
+  --color-surface-sunken:   oklch(0.162 0.004 75);
+  --color-border:           oklch(0.325 0.007 75);
+  --color-border-subtle:    oklch(0.282 0.006 75);
+  --color-text:             oklch(0.930 0.006 85);
+  --color-text-secondary:   oklch(0.680 0.011 80);
+  --color-text-tertiary:    oklch(0.525 0.009 80);
 
-  --color-status-overdue-bg: oklch(0.25 0.06 25);
-  --color-status-due-bg:     oklch(0.27 0.06 75);
-  --color-status-due-soon-bg: oklch(0.28 0.05 90);
-  --color-status-ok-bg:      oklch(0.25 0.06 155);
+  --color-status-overdue-bg:  oklch(0.270 0.055 28);
+  --color-status-due-bg:      oklch(0.285 0.050 66);
+  --color-status-due-soon-bg: oklch(0.295 0.042 88);
+  --color-status-ok-bg:       oklch(0.270 0.045 152);
 
-  --color-danger-bg:  oklch(0.25 0.06 25);
-  --color-success-bg: oklch(0.25 0.06 155);
+  --color-danger-bg:  oklch(0.270 0.055 28);
+  --color-success-bg: oklch(0.270 0.045 152);
 
-  --shadow-sm:  0 1px 2px oklch(0 0 0 / 0.20);
-  --shadow-md:  0 4px 12px oklch(0 0 0 / 0.30);
-  --shadow-lg:  0 8px 24px oklch(0 0 0 / 0.35);
-  --shadow-xl:  0 16px 48px oklch(0 0 0 / 0.45);
+  --color-splash: oklch(0.790 0.135 78);
+
+  --shadow-sm:  0 1px 2px oklch(0 0 0 / 0.24);
+  --shadow-md:  0 4px 12px oklch(0 0 0 / 0.32);
+  --shadow-lg:  0 8px 24px oklch(0 0 0 / 0.38);
+  --shadow-xl:  0 16px 48px oklch(0 0 0 / 0.48);
 }
 
 /* ------------------------------------------------------------------ */
 /* Base                                                                */
 /* ------------------------------------------------------------------ */
-*, *::before, *::after {
-  -webkit-tap-highlight-color: transparent;
-}
+*, *::before, *::after { -webkit-tap-highlight-color: transparent; }
 
 html {
   font-family: var(--font-family-sans);
@@ -211,65 +188,55 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  margin: 0;
-  min-height: 100dvh;
-  overscroll-behavior: none;
+body { margin: 0; min-height: 100dvh; overscroll-behavior: none; }
+#root { min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* Visible keyboard focus, in the accent rather than the browser default. */
+:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
-#root {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Safe area padding for notched phones */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
 
 /* ------------------------------------------------------------------ */
 /* Utilities                                                           */
 /* ------------------------------------------------------------------ */
 .glass {
-  background: oklch(1 0 0 / 0.7);
-  backdrop-filter: blur(16px) saturate(1.8);
-  -webkit-backdrop-filter: blur(16px) saturate(1.8);
+  background: oklch(0.98 0.006 85 / 0.78);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
 }
 
-.dark .glass {
-  background: oklch(0.2 0.02 277 / 0.75);
-}
+.dark .glass { background: oklch(0.242 0.006 75 / 0.80); }
 
 .gradient-accent {
-  background: linear-gradient(135deg, var(--color-accent-500), var(--color-accent-700));
+  background: linear-gradient(135deg, var(--color-accent-400), var(--color-accent-600));
 }
 
 .font-display {
   font-family: var(--font-display);
-  font-feature-settings: 'ss01' 1;
 }
 
-/* Small caps-ish section label. Used instead of a heavier heading so section
-   titles recede and the content carries the page. */
+/* Section label. Set in the grotesque, tracked out and small, so titles
+   recede and the content carries the page. */
 .eyebrow {
-  font-family: var(--font-display);
+  font-family: var(--font-family-sans);
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-/* The signature. Everything else on this screen is deliberately quiet so this
-   is the one thing that shouts. */
+/* The signature. Everything around it is deliberately quiet so this is the
+   one thing that shouts. Set in the grotesque, not the serif -- the joke
+   needs to look stamped on, not typeset. */
 .splash {
   display: inline-block;
   transform-origin: left center;
-  font-family: var(--font-display);
+  font-family: var(--font-family-sans);
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-splash);
@@ -279,6 +246,11 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .splash { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Skeleton loading */

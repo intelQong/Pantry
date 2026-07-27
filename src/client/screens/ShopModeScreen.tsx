@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { ListEntry, Category } from "@shared/types";
 import * as api from "../api";
 import { PriceInput } from "../components/PriceInput";
+import { Icon } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { useToast } from "../components/Toast";
 
@@ -261,7 +262,7 @@ export function ShopModeScreen({
             onClick={handleExit}
             className="w-full py-4 rounded-2xl bg-status-ok text-white font-bold text-base shadow-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
           >
-            <span className="text-xl">🎉</span>
+            <Icon name="check" className="w-5 h-5" strokeWidth={2.5} />
             All Done!
           </button>
         </div>

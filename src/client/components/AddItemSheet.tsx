@@ -1,16 +1,21 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { Category } from "@shared/types";
 import * as api from "../api";
+import { parseMoney, CURRENCY_SYMBOL } from "../lib/money";
+import { suggest, matchCategory } from "../lib/catalog";
 import { BottomSheet } from "../components/BottomSheet";
 import { useToast } from "../components/Toast";
 
 export function AddItemSheet({
   categories,
+  existingNames: existing,
   open,
   onClose,
   onAdded,
 }: {
   categories: Category[];
+  /** Names already in the pantry, so suggestions never offer a duplicate. */
+  existingNames: string[];
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
@@ -24,7 +29,20 @@ export function AddItemSheet({
   const [interval, setInterval] = useState(7);
   const [locked, setLocked] = useState(false);
   const [isStaple, setIsStaple] = useState(true);
+  const [price, setPrice] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Existing names are excluded so the list never offers something already
+  // tracked -- the API would reject it on the unique-name index anyway.
+  const existingNames = useMemo(
+    () => new Set(existing.map((n) => n.toLowerCase())),
+    [existing],
+  );
+  const suggestions = useMemo(
+    () => (showSuggestions ? suggest(name, existingNames) : []),
+    [name, existingNames, showSuggestions],
+  );
   const { toast } = useToast();
 
   const reset = () => {
@@ -53,6 +71,7 @@ export function AddItemSheet({
         restockIntervalDays: interval,
         intervalLocked: locked,
         isStaple,
+        defaultPrice: parseMoney(price),
       });
       toast("Item created");
       reset();
@@ -63,20 +82,69 @@ export function AddItemSheet({
     } finally {
       setSaving(false);
     }
-  }, [name, categoryId, unit, defaultQty, brand, notes, interval, locked, isStaple, toast, onClose, onAdded]);
+  }, [name, categoryId, unit, defaultQty, brand, notes, interval, locked, isStaple, price, toast, onClose, onAdded]);
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Add Item">
       <div className="space-y-3">
-        <label className="block">
+        <div className="block">
           <span className="text-xs font-medium text-text-secondary">Name *</span>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setShowSuggestions(true);
+            }}
             autoFocus
-            className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-500"
-            placeholder="e.g. Rice"
+            autoComplete="off"
+            autoCapitalize="words"
+            spellCheck
+            lang="en"
+            className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-400"
+            placeholder="Start typing — e.g. Rice"
           />
+
+          {suggestions.length > 0 && (
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {suggestions.map((sg) => (
+                <li key={sg.name}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Filling in the interval and category is the real value
+                      // here: those are the two fields nobody wants to guess.
+                      setName(sg.name);
+                      setInterval(sg.days);
+                      const match = matchCategory(categories, sg.category);
+                      if (match) setCategoryId(match.id);
+                      setShowSuggestions(false);
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-accent-50 text-accent-700 text-xs font-medium hover:bg-accent-100 transition-colors"
+                  >
+                    {sg.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <label className="block">
+          <span className="text-xs font-medium text-text-secondary">
+            Usual price <span className="text-text-tertiary font-normal">· optional</span>
+          </span>
+          <div className="relative mt-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-tertiary pointer-events-none">
+              {CURRENCY_SYMBOL}
+            </span>
+            <input
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              inputMode="decimal"
+              className="w-full pl-7 pr-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-400"
+              placeholder="0"
+            />
+          </div>
         </label>
 
         <label className="block">
