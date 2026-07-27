@@ -276,36 +276,44 @@ export function ShopModeScreen({
 
                   {/* Price input (shown when tapped) */}
                   {priceInputId === item.id && !item.bought && (
-                    <div className="mt-1.5 flex items-center gap-2 animate-fade-in">
-                      <div className="flex-1">
-                        <PriceInput value={pendingPrice} onChange={setPendingPrice} />
+                    <div className="mt-1.5 space-y-2 animate-fade-in">
+                      {/* Two rows, not four controls across. Price, quantity,
+                          Done and Skip on one line overflowed the card on a
+                          phone and pushed the buttons off the edge. */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <PriceInput value={pendingPrice} onChange={setPendingPrice} />
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-surface-sunken rounded-lg px-3 py-2 shrink-0">
+                          <span className="text-text-tertiary text-sm">×</span>
+                          <input
+                            value={pendingQty}
+                            onChange={(e) => setPendingQty(e.target.value)}
+                            inputMode="decimal"
+                            placeholder={String(item.qty ?? 1)}
+                            aria-label="Quantity bought"
+                            className="w-10 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
+                          />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 bg-surface-sunken rounded-lg px-3 py-2 shrink-0">
-                        <span className="text-text-tertiary text-sm">×</span>
-                        <input
-                          value={pendingQty}
-                          onChange={(e) => setPendingQty(e.target.value)}
-                          inputMode="decimal"
-                          placeholder={String(item.qty ?? 1)}
-                          aria-label="Quantity bought"
-                          className="w-10 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
-                        />
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleBuy(item, pendingPrice, pendingQty)}
+                          className="flex-1 py-2.5 rounded-lg bg-accent-500 text-text-on-accent text-sm font-semibold active:scale-[0.98] transition-transform"
+                        >
+                          Done
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPriceInputId(null);
+                            handleBuy(item, null, "");
+                          }}
+                          className="px-4 py-2.5 rounded-lg bg-surface-raised border border-border text-sm text-text-secondary hover:text-text transition-colors shrink-0"
+                        >
+                          Skip
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleBuy(item, pendingPrice, pendingQty)}
-                        className="px-4 py-2 rounded-lg bg-accent-500 text-text-on-accent text-sm font-semibold active:scale-95 transition-transform"
-                      >
-                        Done
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPriceInputId(null);
-                          handleBuy(item, null, "");
-                        }}
-                        className="px-3 py-2 rounded-lg bg-surface-raised border border-border text-sm text-text-secondary hover:text-text transition-colors"
-                      >
-                        Skip
-                      </button>
                     </div>
                   )}
                 </div>
