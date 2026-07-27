@@ -50,9 +50,8 @@ export function ListScreen({
         .slice(0, 5)
     : [];
 
-  // Common grocery names, offered only after the pantry's own items. These add
-  // as one-off entries rather than tracked staples -- the shop list is not the
-  // place to silently create something the restock engine will then chase.
+  // Common grocery names, offered after the pantry's own items. These take the
+  // same path as anything else typed here: the item is created and tracked.
   const catalogSuggestions =
     query.trim().length >= 2
       ? suggest(
@@ -234,7 +233,7 @@ export function ListScreen({
               >
                 <Icon name="plus" className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                 <span className="flex-1">{sg.name}</span>
-                <span className="text-xs text-text-tertiary">one-off</span>
+                <span className="text-xs text-text-tertiary">new</span>
               </button>
             ))}
 
@@ -243,7 +242,7 @@ export function ListScreen({
                 onClick={() => handleAddCustom(undefined, true)}
                 className="w-full text-left px-4 py-2 text-xs text-text-tertiary hover:bg-surface-sunken transition-colors border-t border-border-subtle"
               >
-                Just this once — don't track it
+                Add without tracking it
               </button>
             )}
 
@@ -252,7 +251,7 @@ export function ListScreen({
                 onClick={() => handleAddCustom()}
                 className="w-full text-left px-4 py-2.5 text-sm font-medium text-accent-600 hover:bg-surface-sunken transition-colors border-t border-border-subtle"
               >
-                Add "{query.trim()}" to the pantry
+                Add "{query.trim()}"
               </button>
             )}
           </div>
