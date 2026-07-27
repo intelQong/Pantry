@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import type { Member } from "@shared/types";
 import * as api from "../api";
 import { useToast } from "../components/Toast";
+import { usePushSubscription } from "../hooks/usePushSubscription";
 
 export function SettingsScreen({
   currentMemberId,
@@ -20,8 +21,25 @@ export function SettingsScreen({
     return "system";
   });
   const { toast } = useToast();
+  const { state: pushState, error: pushError, subscribe } = usePushSubscription();
+  const [busy, setBusy] = useState(false);
 
   const currentMember = members.find((m) => m.id === currentMemberId);
+
+  const handleEnablePush = useCallback(async () => {
+    setBusy(true);
+    await subscribe();
+    setBusy(false);
+  }, [subscribe]);
+
+  const handleTestPush = useCallback(async () => {
+    try {
+      const { sent } = await api.testPush();
+      toast(sent > 0 ? "Test notification sent" : "No devices registered", sent > 0 ? "success" : "error");
+    } catch {
+      toast("Couldn't send test", "error");
+    }
+  }, [toast]);
 
   const handleThemeChange = useCallback((t: "system" | "light" | "dark") => {
     setTheme(t);
@@ -120,6 +138,64 @@ export function SettingsScreen({
               </button>
             ))}
           </div>
+        </section>
+
+        {/* Notifications */}
+        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-3">
+            Notifications
+          </h3>
+
+          {pushState === "ios-safari" ? (
+            // On iOS, Notification.requestPermission() only works once the site
+            // has been added to the Home Screen -- from a normal Safari tab it
+            // fails silently. Showing a button here would look broken, so we
+            // give the install steps instead.
+            <div className="space-y-2">
+              <p className="text-sm text-text-secondary">
+                To get reminders on iPhone, add Pantry to your Home Screen first:
+              </p>
+              <ol className="text-sm text-text-tertiary space-y-1 list-decimal list-inside">
+                <li>Tap the Share button in Safari</li>
+                <li>Choose <span className="text-text-secondary font-medium">Add to Home Screen</span></li>
+                <li>Open Pantry from the new icon, then come back here</li>
+              </ol>
+            </div>
+          ) : pushState === "unsupported" ? (
+            <p className="text-sm text-text-tertiary">
+              This browser doesn't support push notifications.
+            </p>
+          ) : pushState === "denied" ? (
+            <p className="text-sm text-text-tertiary">
+              Notifications are blocked. Re-enable them for this site in your browser settings.
+            </p>
+          ) : pushState === "subscribed" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-text-secondary">
+                ✓ Reminders are on for this device.
+              </p>
+              <button
+                onClick={handleTestPush}
+                className="w-full py-2.5 rounded-xl bg-surface-sunken text-text-secondary text-sm font-medium hover:text-text transition-colors"
+              >
+                Send a test notification
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-text-secondary">
+                Get a reminder when staples are due for restocking.
+              </p>
+              <button
+                onClick={handleEnablePush}
+                disabled={busy}
+                className="w-full py-2.5 rounded-xl gradient-accent text-text-on-accent text-sm font-semibold shadow-sm disabled:opacity-60 transition-opacity"
+              >
+                {busy ? "Enabling…" : "Turn on reminders"}
+              </button>
+              {pushError && <p className="text-sm text-danger">{pushError}</p>}
+            </div>
+          )}
         </section>
 
         {/* Coming soon */}

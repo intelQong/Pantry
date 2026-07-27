@@ -80,27 +80,14 @@ All routes are under `/api`. `requireSession` = logged-in device;
 
 ## Remaining work
 
-### Phase 3 — PWA + Web Push wiring — **BLOCKED on user**
+### Phase 3 — PWA + Web Push wiring — code complete, **verification blocked on user**
 
-The crypto is done and proven (`test/push-encryption.test.ts`). What remains:
+Manifest, icons, service worker, subscription flow, the three push routes, and the
+iOS Home-Screen guidance are all in place and tested (103 tests).
 
-1. `public/manifest.json` + icons; `display: standalone`.
-2. A service worker with a `push` event handler that calls
-   `self.registration.showNotification(...)`, and a `notificationclick` handler that
-   focuses/opens the app.
-3. Client subscription flow: `Notification.requestPermission()` →
-   `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`
-   → POST the subscription to a new `POST /api/push/subscribe` route (insert into
-   `push_subscription`, keyed on the unique `endpoint`).
-4. A `POST /api/push/test` route to fire a push at the caller on demand.
-5. **iOS-specific onboarding UI**: on iPhone, `Notification.requestPermission()` only
-   works *after* the site is added to the Home Screen. Detect
-   `navigator.standalone === false` on iOS and show "Share → Add to Home Screen" guidance
-   instead of a permission button that would silently fail.
-
-**Blocked because:** needs a Cloudflare account, a real HTTPS deployment, and both
-physical phones. Do not mark push done on a green unit test — verify a phone actually
-buzzes. See `docs/DEPLOYMENT.md`.
+**Still blocked on:** a Cloudflare account, a real HTTPS deployment, and both physical
+phones. Do not mark push done on a green unit test — the suite proves the encryption is
+correct, not that a phone buzzes. See `docs/DEPLOYMENT.md`.
 
 ### Phase 5 — Insights
 Consumption rhythm per item, monthly spend, spend by category, price trend. All of it
@@ -116,16 +103,23 @@ All four settings areas, theme system, Shop Mode, empty states.
 Known edge case to handle in the settings UI: if `notify_hour` is set inside the quiet
 window, the member is never notified and nothing says so. Warn in the UI.
 
-### The whole frontend
-No React code exists beyond the scaffold. Six screens described in `docs/DESIGN.md`.
-Load the `frontend-design` skill first.
-
 ---
 
 ## How this work was run
 
 The user asked for Opus to plan and cheaper models to execute, with verification. Phases
 2 and 4 were delegated to Sonnet agents with precise specs; both were then independently
-verified by re-running the suite and reading the diff. **Both delegated phases contained
-a real bug that the passing tests did not catch** — the double-buy and the corrupt-push
-abort. Read delegated code; do not accept a green suite as proof.
+verified by re-running the suite and reading the diff. **Every delegated phase so far has shipped a real
+bug its own passing tests did not catch:**
+
+- Sonnet, Phase 2 — buying was not idempotent; a double-tap wrote two purchase rows.
+- Sonnet, Phase 4 — push encryption sat outside the try/catch, so one corrupt row
+  aborted the whole sweep.
+- Antigravity, frontend — all four PWA icons referenced but never created (blocking
+  install on both platforms, and therefore push on iOS); the service worker was only
+  registered lazily inside `subscribe()`, leaving `serviceWorker.ready` hanging on
+  mount; and `usePushSubscription` was dead code, imported nowhere, so notifications
+  could not be enabled from the UI at all. Its three new backend routes shipped with
+  zero tests.
+
+Read delegated code. A green suite proves only that the tests that exist pass.

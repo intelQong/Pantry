@@ -147,6 +147,7 @@ export const subscribePush = (subscription: {
   userAgent?: string;
 }) => request<{ ok: true }>("POST", "/push/subscribe", subscription);
 
-export const testPush = () => request<{ ok: true }>("POST", "/push/test");
+export const testPush = () =>
+  request<{ ok: true; sent: number; failed: number }>("POST", "/push/test");
 
 export { ApiRequestError };
