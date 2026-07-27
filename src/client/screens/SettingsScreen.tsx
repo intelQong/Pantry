@@ -288,7 +288,7 @@ export function SettingsScreen({
                 onClick={() => handleThemeChange(t)}
                 className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
                   theme === t
-                    ? "gradient-accent text-text-on-accent shadow-sm"
+                    ? "bg-accent-500 text-text-on-accent shadow-sm"
                     : "bg-surface-sunken text-text-secondary hover:text-text"
                 }`}
               >
@@ -348,7 +348,7 @@ export function SettingsScreen({
               <button
                 onClick={handleEnablePush}
                 disabled={busy}
-                className="w-full py-2.5 rounded-xl gradient-accent text-text-on-accent text-sm font-semibold shadow-sm disabled:opacity-60 transition-opacity"
+                className="w-full py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold shadow-sm disabled:opacity-60 transition-opacity"
               >
                 {busy ? "Enabling…" : "Turn on reminders"}
               </button>

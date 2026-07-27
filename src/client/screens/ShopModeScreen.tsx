@@ -3,6 +3,7 @@ import type { ListEntry, Category } from "@shared/types";
 import * as api from "../api";
 import { PriceInput } from "../components/PriceInput";
 import { Icon } from "../components/Icon";
+import { formatMoney } from "../lib/money";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { useToast } from "../components/Toast";
 
@@ -126,16 +127,14 @@ export function ShopModeScreen({
             onClick={handleExit}
             className="flex items-center gap-1 text-sm text-text-secondary hover:text-text transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-            </svg>
+<Icon name="chevron" className="w-4 h-4 rotate-180" strokeWidth={2} />
             Back
           </button>
-          <h1 className="text-lg font-bold text-text">Shop Mode</h1>
+          <h1 className="font-display text-lg font-semibold text-text">Shop Mode</h1>
           <div className="text-right">
             {runningTotal > 0 && (
-              <div className="text-sm font-semibold text-accent-600">
-                ৳ {(runningTotal / 100).toFixed(2)}
+              <div className="font-display text-base font-semibold text-accent-600 tabular-nums">
+                {formatMoney(runningTotal)}
               </div>
             )}
             <div className="text-xs text-text-tertiary">
@@ -147,7 +146,7 @@ export function ShopModeScreen({
         {/* Progress bar */}
         <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
           <div
-            className="h-full rounded-full gradient-accent transition-all duration-500"
+            className="h-full rounded-full bg-accent-500 transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -194,9 +193,7 @@ export function ShopModeScreen({
                         }`}
                       >
                         {item.bought && (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                          </svg>
+                          <Icon name="check" className="w-4 h-4" strokeWidth={3} />
                         )}
                       </div>
 
@@ -233,7 +230,7 @@ export function ShopModeScreen({
                       </div>
                       <button
                         onClick={() => handleBuy(item, pendingPrice)}
-                        className="px-4 py-2 rounded-lg gradient-accent text-text-on-accent text-sm font-semibold active:scale-95 transition-transform"
+                        className="px-4 py-2 rounded-lg bg-accent-500 text-text-on-accent text-sm font-semibold active:scale-95 transition-transform"
                       >
                         Done
                       </button>

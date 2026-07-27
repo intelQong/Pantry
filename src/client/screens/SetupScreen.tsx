@@ -71,7 +71,7 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
               type="text"
               value={householdName}
               onChange={(e) => setHouseholdName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 transition-all"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20 transition-all"
               placeholder="e.g. Home"
             />
           </div>
@@ -84,7 +84,7 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
               type="password"
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 transition-all"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20 transition-all"
               placeholder="At least 4 characters"
               autoComplete="new-password"
             />
@@ -98,7 +98,7 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
               type="password"
               value={passcodeConfirm}
               onChange={(e) => setPasscodeConfirm(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 transition-all"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20 transition-all"
               placeholder="Type it again"
               autoComplete="new-password"
             />
@@ -113,14 +113,14 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
                 type="text"
                 value={member1}
                 onChange={(e) => setMember1(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20 transition-all"
                 placeholder="Person 1"
               />
               <input
                 type="text"
                 value={member2}
                 onChange={(e) => setMember2(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20 transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-surface-sunken border border-border text-text text-sm outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20 transition-all"
                 placeholder="Person 2 (optional)"
               />
             </div>
@@ -154,7 +154,7 @@ export function SetupScreen({ onDone }: { onDone: () => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl gradient-accent text-text-on-accent font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-50"
+            className="w-full py-3 rounded-xl bg-accent-500 text-text-on-accent font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {loading ? "Setting up…" : "Get Started"}
           </button>

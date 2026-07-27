@@ -73,7 +73,7 @@ export function BottomSheet({
 
         {title && (
           <div className="px-5 pb-3 pt-1">
-            <h2 className="text-lg font-semibold text-text">{title}</h2>
+            <h2 className="font-display text-lg font-semibold text-text">{title}</h2>
           </div>
         )}
 

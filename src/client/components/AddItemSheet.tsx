@@ -241,7 +241,7 @@ export function AddItemSheet({
         <button
           onClick={handleSave}
           disabled={saving || !name.trim()}
-          className="w-full py-2.5 rounded-xl gradient-accent text-text-on-accent text-sm font-semibold disabled:opacity-50 mt-2"
+          className="w-full py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold disabled:opacity-50 mt-2"
         >
           {saving ? "Adding…" : "Add Item"}
         </button>

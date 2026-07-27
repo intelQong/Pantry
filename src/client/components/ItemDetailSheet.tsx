@@ -110,7 +110,7 @@ export function ItemDetailSheet({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-500"
+              className="w-full mt-1 px-3 py-2 rounded-lg bg-surface-sunken border border-border text-sm text-text outline-none focus:border-accent-400"
             />
           </label>
 
@@ -232,7 +232,7 @@ export function ItemDetailSheet({
             <button
               onClick={handleSave}
               disabled={saving || !name.trim()}
-              className="flex-1 py-2.5 rounded-xl gradient-accent text-text-on-accent text-sm font-semibold disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -291,7 +291,7 @@ export function ItemDetailSheet({
           {/* Purchase history */}
           {purchases.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
+              <h4 className="eyebrow text-text-tertiary mb-2">
                 Purchase History
               </h4>
               <div className="space-y-1">

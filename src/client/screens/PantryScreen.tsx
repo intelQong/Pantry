@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ItemWithStatus, Category } from "@shared/types";
 import * as api from "../api";
+import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
@@ -45,17 +46,15 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
     <div className="safe-top">
       <header className="px-5 pt-6 pb-2">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-text">Pantry</h1>
+          <h1 className="font-display text-[1.75rem] font-semibold text-text">Pantry</h1>
           <span className="text-sm text-text-secondary">{items.length} items</span>
         </div>
       </header>
 
       {/* Search */}
       <div className="px-4 mb-3">
-        <div className="flex items-center gap-2 bg-surface-sunken rounded-xl border border-border px-3 py-2 focus-within:border-accent-500 transition-all">
-          <svg className="w-4 h-4 text-text-tertiary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
+        <div className="flex items-center gap-2 bg-surface-sunken rounded-xl border border-border px-3 py-2 focus-within:border-accent-400 transition-all">
+<Icon name="search" className="w-4 h-4 text-text-tertiary shrink-0" />
           <input
             type="text"
             value={search}
@@ -65,9 +64,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
           />
           {search && (
             <button onClick={() => setSearch("")} className="text-text-tertiary hover:text-text">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-4 h-4" strokeWidth={1.5} />
             </button>
           )}
         </div>
@@ -82,7 +79,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
             !search && (
               <button
                 onClick={() => setShowAdd(true)}
-                className="px-5 py-2 rounded-xl gradient-accent text-text-on-accent text-sm font-semibold"
+                className="px-5 py-2 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold"
               >
                 Add Item
               </button>
@@ -139,11 +136,9 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
       {/* FAB */}
       <button
         onClick={() => setShowAdd(true)}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full gradient-accent text-text-on-accent shadow-lg hover:shadow-xl active:scale-90 transition-all flex items-center justify-center z-30"
+        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-accent-500 text-text-on-accent shadow-lg hover:shadow-xl active:scale-90 transition-all flex items-center justify-center z-30"
       >
-        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
+        <Icon name="plus" className="w-7 h-7" strokeWidth={2} />
       </button>
 
       {/* Sheets */}

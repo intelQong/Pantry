@@ -112,7 +112,7 @@ export function App() {
           {route.page === "list" && <ListScreen categories={categories} navigate={navigate} />}
           {route.page === "shop" && <ShopModeScreen categories={categories} navigate={navigate} />}
           {route.page === "pantry" && <PantryScreen categories={categories} />}
-          {route.page === "insights" && <InsightsScreen />}
+          {route.page === "insights" && <InsightsScreen categories={categories} />}
           {route.page === "settings" && (
             <SettingsScreen
               currentMemberId={state.memberId}
