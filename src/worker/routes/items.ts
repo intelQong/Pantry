@@ -2,9 +2,13 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
-import type { Item, Category } from "../../shared/types";
+import { computeStatus, byUrgency } from "../restock";
+import type { Item, Category, ItemWithStatus } from "../../shared/types";
 
 const items = new Hono<AppEnv>();
+
+/** How far ahead of due an item starts showing as due_soon, absent a member profile. */
+const DEFAULT_LEAD_DAYS = 2;
 
 interface ItemRow {
   id: string;
@@ -19,6 +23,7 @@ interface ItemRow {
   interval_locked: number;
   last_purchased_at: number | null;
   archived: number;
+  created_at: number;
 }
 
 function toItem(row: ItemRow): Item {
@@ -38,20 +43,76 @@ function toItem(row: ItemRow): Item {
   };
 }
 
-/** All non-archived items for the household, in no particular order (the client sorts/filters). */
+function toItemWithStatus(row: ItemRow, leadDays: number, now: number, onList: boolean): ItemWithStatus {
+  const { status, daysSince, daysUntilDue } = computeStatus(row, leadDays, now);
+  return { ...toItem(row), status, daysSince, daysUntilDue, onList };
+}
+
+const ITEM_COLUMNS = `id, name, category_id, unit, default_qty, brand, notes, is_staple,
+            restock_interval_days, interval_locked, last_purchased_at, archived, created_at`;
+
+/** The item ids currently sitting on the household's pending shop list. */
+async function pendingItemIds(db: D1Database, householdId: string): Promise<Set<string>> {
+  const rows = await db
+    .prepare("SELECT item_id FROM list_entry WHERE household_id = ? AND status = 'pending' AND item_id IS NOT NULL")
+    .bind(householdId)
+    .all<{ item_id: string }>();
+  return new Set(rows.results.map((r) => r.item_id));
+}
+
+/** lead_days is per-member; sessions with no profile chosen yet fall back to the schema default. */
+async function leadDaysFor(db: D1Database, memberId: string | null): Promise<number> {
+  if (!memberId) return DEFAULT_LEAD_DAYS;
+  const settings = await db
+    .prepare("SELECT lead_days FROM member_settings WHERE member_id = ?")
+    .bind(memberId)
+    .first<{ lead_days: number }>();
+  return settings?.lead_days ?? DEFAULT_LEAD_DAYS;
+}
+
+/** All non-archived items for the household, with live restock status attached. */
 items.get("/items", requireSession, async (c) => {
   const session = c.get("session");
-  const rows = await c.env.DB.prepare(
-    `SELECT id, name, category_id, unit, default_qty, brand, notes, is_staple,
-            restock_interval_days, interval_locked, last_purchased_at, archived
-       FROM item
-      WHERE household_id = ? AND archived = 0
-      ORDER BY name`,
-  )
-    .bind(session.householdId)
-    .all<ItemRow>();
+  const now = nowSeconds();
 
-  return c.json(rows.results.map(toItem));
+  const [rows, leadDays, onList] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT ${ITEM_COLUMNS}
+         FROM item
+        WHERE household_id = ? AND archived = 0
+        ORDER BY name`,
+    )
+      .bind(session.householdId)
+      .all<ItemRow>(),
+    leadDaysFor(c.env.DB, session.memberId),
+    pendingItemIds(c.env.DB, session.householdId),
+  ]);
+
+  return c.json(rows.results.map((row) => toItemWithStatus(row, leadDays, now, onList.has(row.id))));
+});
+
+/** Every staple that needs attention, most urgent first -- the "what do I need to buy" screen. */
+items.get("/today", requireMember, async (c) => {
+  const session = c.get("session");
+  const now = nowSeconds();
+
+  const [rows, leadDays, onList] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT ${ITEM_COLUMNS}
+         FROM item
+        WHERE household_id = ? AND archived = 0 AND is_staple = 1`,
+    )
+      .bind(session.householdId)
+      .all<ItemRow>(),
+    // requireMember guarantees session.memberId is set.
+    leadDaysFor(c.env.DB, session.memberId),
+    pendingItemIds(c.env.DB, session.householdId),
+  ]);
+
+  const withStatus = rows.results.map((row) => toItemWithStatus(row, leadDays, now, onList.has(row.id)));
+  withStatus.sort(byUrgency);
+
+  return c.json(withStatus);
 });
 
 items.post("/items", requireMember, async (c) => {
@@ -124,11 +185,7 @@ items.post("/items", requireMember, async (c) => {
     throw err;
   }
 
-  const row = await c.env.DB.prepare(
-    `SELECT id, name, category_id, unit, default_qty, brand, notes, is_staple,
-            restock_interval_days, interval_locked, last_purchased_at, archived
-       FROM item WHERE id = ?`,
-  )
+  const row = await c.env.DB.prepare(`SELECT ${ITEM_COLUMNS} FROM item WHERE id = ?`)
     .bind(id)
     .first<ItemRow>();
 
@@ -211,11 +268,7 @@ items.patch("/items/:id", requireSession, async (c) => {
     }
   }
 
-  const row = await c.env.DB.prepare(
-    `SELECT id, name, category_id, unit, default_qty, brand, notes, is_staple,
-            restock_interval_days, interval_locked, last_purchased_at, archived
-       FROM item WHERE id = ?`,
-  )
+  const row = await c.env.DB.prepare(`SELECT ${ITEM_COLUMNS} FROM item WHERE id = ?`)
     .bind(id)
     .first<ItemRow>();
 

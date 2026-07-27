@@ -9,6 +9,9 @@ declare global {
     interface Env {
       TEST_MIGRATIONS: D1Migration[];
       SESSION_SECRET: string;
+      VAPID_PUBLIC_KEY: string;
+      VAPID_PRIVATE_KEY: string;
+      VAPID_SUBJECT: string;
     }
   }
 }

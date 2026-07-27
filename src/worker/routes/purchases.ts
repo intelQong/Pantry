@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
+import { relearnInterval } from "../restock";
 import type { Purchase } from "../../shared/types";
 
 const purchases = new Hono<AppEnv>();
@@ -128,6 +129,14 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
     return c.json({ ok: true, purchaseId: null, alreadyResolved: true });
   }
 
+  // Relearning runs after the batch, not inside it: it's a read-then-maybe-write
+  // against the same item row, and folding it into the D1 batch above would
+  // buy nothing (the batch already committed) while making the batch itself
+  // harder to reason about.
+  if (entry.item_id) {
+    await relearnInterval(c.env.DB, entry.item_id, session.householdId);
+  }
+
   return c.json({ ok: true, purchaseId, alreadyResolved: false });
 });
 
@@ -177,6 +186,9 @@ purchases.post("/purchases", requireMember, async (c) => {
       session.householdId,
     ),
   ]);
+
+  // Runs after the batch above, same reasoning as in POST /list/:id/bought.
+  await relearnInterval(c.env.DB, body.itemId, session.householdId);
 
   const row = await c.env.DB.prepare(
     `SELECT id, item_id, purchased_at, qty, unit, price_total, bought_by, note

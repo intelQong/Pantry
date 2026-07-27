@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import type { AppEnv, Env } from "./env";
+import { nowSeconds } from "./env";
 import { loadSession } from "./middleware";
+import { runDigestSweep } from "./cron";
 import auth from "./routes/auth";
 import items from "./routes/items";
 import list from "./routes/list";
@@ -35,7 +37,7 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  async scheduled(_event: ScheduledController, _env: Env, _ctx: ExecutionContext): Promise<void> {
-    // Phase 4: hourly restock digest sweep.
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await runDigestSweep(env, nowSeconds());
   },
 };
