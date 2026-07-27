@@ -1,0 +1,271 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { ListEntry, Category } from "@shared/types";
+import * as api from "../api";
+import { PriceInput } from "../components/PriceInput";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { useToast } from "../components/Toast";
+
+interface ShopItem extends ListEntry {
+  bought: boolean;
+  priceTotal: number | null;
+}
+
+export function ShopModeScreen({
+  categories,
+  navigate,
+}: {
+  categories: Category[];
+  navigate: (path: string) => void;
+}) {
+  const [items, setItems] = useState<ShopItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [priceInputId, setPriceInputId] = useState<string | null>(null);
+  const [pendingPrice, setPendingPrice] = useState<number | null>(null);
+  const [buying, setBuying] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Fetch list and request wake lock
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const entries = await api.getList();
+        setItems(entries.map((e) => ({ ...e, bought: false, priceTotal: null })));
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+
+    // Keep screen on while shopping
+    const acquireWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+        }
+      } catch {
+        // Wake lock not supported or denied — not critical
+      }
+    };
+    acquireWakeLock();
+
+    return () => {
+      wakeLockRef.current?.release().catch(() => {});
+    };
+  }, []);
+
+  const boughtCount = items.filter((i) => i.bought).length;
+  const totalItems = items.length;
+  const runningTotal = items.reduce((sum, i) => sum + (i.priceTotal ?? 0), 0);
+  const progress = totalItems > 0 ? (boughtCount / totalItems) * 100 : 0;
+  const allDone = totalItems > 0 && boughtCount === totalItems;
+
+  const handleBuy = useCallback(
+    async (item: ShopItem, price: number | null = null) => {
+      if (buying.has(item.id)) return;
+      setBuying((prev) => new Set(prev).add(item.id));
+      setPriceInputId(null);
+
+      try {
+        await api.buyListEntry(item.id, {
+          priceTotal: price,
+        });
+        setItems((prev) =>
+          prev.map((i) =>
+            i.id === item.id ? { ...i, bought: true, priceTotal: price } : i,
+          ),
+        );
+      } catch {
+        toast("Failed to mark as bought", "error");
+      } finally {
+        setBuying((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      }
+    },
+    [buying, toast],
+  );
+
+  const handleExit = useCallback(() => {
+    wakeLockRef.current?.release().catch(() => {});
+    navigate("list");
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-dvh bg-surface-sunken flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // Group by category in aisle order
+  const grouped: { cat: Category | null; items: ShopItem[] }[] = [];
+  const byCategory = new Map<string | null, ShopItem[]>();
+  for (const item of items) {
+    const key = item.categoryId ?? "__none__";
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key)!.push(item);
+  }
+  for (const cat of categories) {
+    const catItems = byCategory.get(cat.id);
+    if (catItems?.length) grouped.push({ cat, items: catItems });
+  }
+  const uncategorised = byCategory.get("__none__");
+  if (uncategorised?.length) grouped.push({ cat: null, items: uncategorised });
+
+  return (
+    <div className="min-h-dvh bg-surface-sunken flex flex-col safe-top">
+      {/* Top bar */}
+      <header className="sticky top-0 z-20 glass border-b border-border px-4 pt-3 pb-3">
+        <div className="flex items-center justify-between mb-2">
+          <button
+            onClick={handleExit}
+            className="flex items-center gap-1 text-sm text-text-secondary hover:text-text transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+            Back
+          </button>
+          <h1 className="text-lg font-bold text-text">Shop Mode</h1>
+          <div className="text-right">
+            {runningTotal > 0 && (
+              <div className="text-sm font-semibold text-accent-600">
+                ৳ {(runningTotal / 100).toFixed(2)}
+              </div>
+            )}
+            <div className="text-xs text-text-tertiary">
+              {boughtCount}/{totalItems}
+            </div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full gradient-accent transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </header>
+
+      {/* Items */}
+      <div className="flex-1 px-4 py-3 space-y-4 pb-24">
+        {grouped.map(({ cat, items: groupItems }) => (
+          <section key={cat?.id ?? "none"}>
+            <h3 className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wide px-1 mb-2">
+              {cat && (
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+              )}
+              {cat?.name ?? "Other"}
+            </h3>
+            <div className="space-y-2">
+              {groupItems.map((item) => (
+                <div key={item.id}>
+                  <button
+                    onClick={() => {
+                      if (item.bought) return;
+                      // Show price input on tap
+                      if (priceInputId === item.id) {
+                        handleBuy(item, pendingPrice);
+                      } else {
+                        setPriceInputId(item.id);
+                        setPendingPrice(null);
+                      }
+                    }}
+                    disabled={item.bought || buying.has(item.id)}
+                    className={`w-full text-left p-4 rounded-2xl border transition-all ${
+                      item.bought
+                        ? "bg-status-ok-bg border-status-ok/30 opacity-70"
+                        : "bg-surface-raised border-border-subtle shadow-sm hover:shadow-md active:scale-[0.99]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Checkbox circle */}
+                      <div
+                        className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                          item.bought
+                            ? "bg-status-ok border-status-ok text-white animate-check"
+                            : "border-border"
+                        }`}
+                      >
+                        {item.bought && (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <span
+                          className={`text-base font-medium ${
+                            item.bought ? "line-through text-text-tertiary" : "text-text"
+                          }`}
+                        >
+                          {item.displayName}
+                        </span>
+                        {item.qty && (
+                          <span className="text-sm text-text-tertiary ml-2">×{item.qty}</span>
+                        )}
+                      </div>
+
+                      {item.priceTotal !== null && (
+                        <span className="text-sm font-medium text-text-secondary">
+                          ৳{(item.priceTotal / 100).toFixed(0)}
+                        </span>
+                      )}
+
+                      {buying.has(item.id) && (
+                        <div className="w-5 h-5 rounded-full border-2 border-accent-300 border-t-accent-600 shrink-0" style={{ animation: "spin 0.7s linear infinite" }} />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Price input (shown when tapped) */}
+                  {priceInputId === item.id && !item.bought && (
+                    <div className="mt-1.5 flex items-center gap-2 animate-fade-in">
+                      <div className="flex-1">
+                        <PriceInput value={pendingPrice} onChange={setPendingPrice} />
+                      </div>
+                      <button
+                        onClick={() => handleBuy(item, pendingPrice)}
+                        className="px-4 py-2 rounded-lg gradient-accent text-text-on-accent text-sm font-semibold active:scale-95 transition-transform"
+                      >
+                        Done
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPriceInputId(null);
+                          handleBuy(item, null);
+                        }}
+                        className="px-3 py-2 rounded-lg bg-surface-raised border border-border text-sm text-text-secondary hover:text-text transition-colors"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      {/* Done floating button */}
+      {allDone && (
+        <div className="fixed bottom-6 left-4 right-4 z-30 animate-slide-up">
+          <button
+            onClick={handleExit}
+            className="w-full py-4 rounded-2xl bg-status-ok text-white font-bold text-base shadow-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+          >
+            <span className="text-xl">🎉</span>
+            All Done!
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

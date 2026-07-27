@@ -1,8 +1,8 @@
 # Progress
 
-**Status: backend complete and tested. No UI exists yet. Nothing is deployed.**
+**Status: backend complete and tested. Frontend built. Nothing is deployed.**
 
-94 tests passing, typecheck clean, three commits on `main`.
+94 tests passing, typecheck clean, Vite production build clean.
 
 ```bash
 export PATH="$HOME/.nvm/versions/node/v22.23.0/bin:$PATH"
@@ -34,6 +34,18 @@ delivery with dead-subscription pruning.
 Found and fixed a robustness bug: push encryption sat outside the try/catch and the cron
 loop was unguarded, so one corrupt `p256dh` row would throw out of `sendToMember`, abort
 the sweep, and silently stop **every** member being notified.
+
+### Frontend — all six screens + PWA wiring (Antigravity)
+Complete React 19 + Tailwind 4 frontend: auth flow (setup, login, profile pick),
+Today screen (urgency-grouped due items), Shop List (category-grouped with autocomplete
+quick-add), Shop Mode (full-screen immersive — big tap targets, aisle order, optional
+price input, running total, progress bar, Wake Lock API, celebration on completion),
+Pantry (search, item detail/edit bottom sheets, add item), Insights (placeholder with
+stats cards), Settings (theme toggle, profile switch, logout). Plus: typed API client
+for all 19 endpoints, hash-based router, Toast/BottomSheet/StatusBadge/CategoryBadge
+components, PWA manifest, service worker, push subscription hook, and three new push
+API routes (`GET /push/key`, `POST /push/subscribe`, `POST /push/test`). 30 new files,
+1 modified. Build output: 243KB JS (71KB gzip), 28KB CSS (6KB gzip).
 
 ---
 

@@ -1,0 +1,23 @@
+{
+  "name": "Pantry",
+  "short_name": "Pantry",
+  "description": "Smart weekly grocery restock for your household",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1b4b",
+  "theme_color": "#1e1b4b",
+  "orientation": "portrait-primary",
+  "categories": ["food", "shopping", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
