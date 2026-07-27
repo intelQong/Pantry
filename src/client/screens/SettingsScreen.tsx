@@ -126,7 +126,7 @@ export function SettingsScreen({
 
       <div className="px-4 space-y-4 pb-8">
         {/* Current profile */}
-        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+        <section className="card p-4">
           <h3 className="eyebrow text-text-tertiary mb-3">
             Profile
           </h3>
@@ -204,7 +204,7 @@ export function SettingsScreen({
         </section>
 
         {/* Profile lock */}
-        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+        <section className="card p-4">
           <h3 className="eyebrow text-text-tertiary mb-3">Profile lock</h3>
 
           <p className="text-sm text-text-secondary">
@@ -277,7 +277,7 @@ export function SettingsScreen({
         </section>
 
         {/* Theme */}
-        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+        <section className="card p-4">
           <h3 className="eyebrow text-text-tertiary mb-3">
             Appearance
           </h3>
@@ -299,7 +299,7 @@ export function SettingsScreen({
         </section>
 
         {/* Notifications */}
-        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+        <section className="card p-4">
           <h3 className="eyebrow text-text-tertiary mb-3">
             Notifications
           </h3>
@@ -358,7 +358,7 @@ export function SettingsScreen({
         </section>
 
         {/* Coming soon */}
-        <section className="bg-surface-raised border border-border-subtle rounded-2xl p-4">
+        <section className="card p-4">
           <h3 className="eyebrow text-text-tertiary mb-2">
             More Settings
           </h3>

@@ -133,7 +133,7 @@ export function ShopModeScreen({
           <h1 className="font-display text-lg font-semibold text-text">Shop Mode</h1>
           <div className="text-right">
             {runningTotal > 0 && (
-              <div className="font-display text-base font-semibold text-accent-600 tabular-nums">
+              <div className="numeral text-base font-semibold text-accent-600">
                 {formatMoney(runningTotal)}
               </div>
             )}

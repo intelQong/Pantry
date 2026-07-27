@@ -77,10 +77,10 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
 
       <div className="px-4 space-y-3">
         {/* Next shop estimate ------------------------------------------- */}
-        <section className="rounded-2xl border border-border-subtle bg-surface-raised p-4">
+        <section className="card p-4">
           <h2 className="eyebrow text-text-tertiary mb-2">Next shop, roughly</h2>
 
-          <p className="font-display text-[2.25rem] leading-none font-semibold text-text tabular-nums">
+          <p className="numeral text-[2.25rem] leading-none font-semibold text-text">
             {stats.priced.length > 0 ? formatMoney(stats.estimate) : "—"}
           </p>
 
@@ -104,7 +104,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
 
         {/* Composition -------------------------------------------------- */}
         {stats.byCategory.length > 0 && (
-          <section className="rounded-2xl border border-border-subtle bg-surface-raised p-4">
+          <section className="card p-4">
             <h2 className="eyebrow text-text-tertiary mb-3">What's in the pantry</h2>
             <ul className="space-y-2">
               {stats.byCategory.map((c) => (
@@ -123,7 +123,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
                       }}
                     />
                   </span>
-                  <span className="w-6 text-right text-xs tabular-nums text-text">{c.count}</span>
+                  <span className="numeral w-6 text-right text-xs text-text">{c.count}</span>
                 </li>
               ))}
             </ul>

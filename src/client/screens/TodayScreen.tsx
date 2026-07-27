@@ -112,10 +112,10 @@ export function TodayScreen({
 
       <div className="px-4 space-y-3">
         {/* Pantry tally ------------------------------------------------- */}
-        <section className="rounded-2xl border border-border-subtle bg-surface-raised p-4">
+        <section className="card p-4">
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="eyebrow text-text-tertiary">Pantry</h2>
-            <span className="font-display text-sm text-text-secondary tabular-nums">
+            <span className="numeral text-sm text-text-secondary">
               {total} {total === 1 ? "staple" : "staples"}
             </span>
           </div>
@@ -152,7 +152,7 @@ export function TodayScreen({
                   counts[i]! > 0 ? (
                     <span key={t.status} className="flex items-center gap-1.5 text-xs text-text-secondary">
                       <span className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />
-                      <span className="tabular-nums font-medium text-text">{counts[i]}</span>
+                      <span className="numeral font-medium text-text">{counts[i]}</span>
                       {t.label}
                     </span>
                   ) : null,
@@ -165,7 +165,7 @@ export function TodayScreen({
         {/* Shop list ---------------------------------------------------- */}
         <button
           onClick={() => onNavigate("list")}
-          className="w-full flex items-center gap-3 rounded-2xl border border-border-subtle bg-surface-raised p-4 text-left hover:border-border transition-colors active:scale-[0.99]"
+          className="w-full flex items-center gap-3 card p-4 text-left hover:border-border transition-colors active:scale-[0.99]"
         >
           <span className="shrink-0 w-9 h-9 rounded-xl bg-accent-50 text-accent-600 flex items-center justify-center">
             <Icon name="basket" />
@@ -184,7 +184,7 @@ export function TodayScreen({
         {/* Needs attention ---------------------------------------------- */}
         {grouped.length === 0 ? (
           total > 0 && (
-            <section className="rounded-2xl border border-border-subtle bg-surface-raised px-4 py-8 text-center">
+            <section className="card px-4 py-8 text-center">
               <span className="inline-flex w-10 h-10 rounded-xl bg-status-ok-bg text-status-ok items-center justify-center mb-3">
                 <Icon name="leaf" />
               </span>
@@ -214,7 +214,7 @@ export function TodayScreen({
                       return (
                         <li
                           key={item.id}
-                          className="relative flex items-center gap-3 rounded-xl border border-border-subtle bg-surface-raised py-2.5 pl-4 pr-2.5 overflow-hidden"
+                          className="relative flex items-center gap-3 card-row py-2.5 pl-4 pr-2.5 overflow-hidden"
                         >
                           {/* The rule is the status. No badge needed. */}
                           <span className={`absolute left-0 inset-y-0 w-1 ${cfg.bar}`} />

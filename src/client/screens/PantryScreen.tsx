@@ -94,7 +94,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
               <button
                 key={item.id}
                 onClick={() => setSelectedId(item.id)}
-                className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-surface-raised border border-border-subtle hover:shadow-sm active:scale-[0.99] transition-all"
+                className="w-full text-left flex items-center gap-3 p-3 card-row hover:shadow-sm active:scale-[0.99] transition-all"
               >
                 {/* Status dot */}
                 <div

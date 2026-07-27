@@ -219,7 +219,7 @@ export function ListScreen({
                   {groupEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-raised border border-border-subtle"
+                      className="flex items-center gap-3 px-3 py-2.5 card-row"
                     >
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium text-text">{entry.displayName}</span>
