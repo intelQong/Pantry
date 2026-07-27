@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { Member } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
+import { Avatar } from "../components/Avatar";
 
 export function ProfilePickScreen({
   members,
@@ -63,12 +64,7 @@ export function ProfilePickScreen({
       <div className="min-h-dvh flex items-center justify-center px-6 bg-surface">
         <div className="w-full max-w-[19rem] animate-fade-in">
           <div className="flex flex-col items-center text-center mb-8">
-            <span
-              className="w-14 h-14 rounded-full flex items-center justify-center text-white font-display text-xl font-semibold mb-4"
-              style={{ backgroundColor: challenge.accentColor }}
-            >
-              {challenge.name.charAt(0).toUpperCase()}
-            </span>
+            <Avatar seed={challenge.id} color={challenge.accentColor} className="w-14 h-14 mb-4" />
             <h1 className="font-display text-2xl font-semibold text-text">{challenge.name}</h1>
             <p className="text-sm text-text-secondary mt-1.5 flex items-center gap-1.5">
               <Icon name="shield" className="w-3.5 h-3.5" />
@@ -145,13 +141,7 @@ export function ProfilePickScreen({
                 border border-border hover:border-accent-400 active:scale-[0.99]
                 transition-all disabled:opacity-50"
             >
-              <span
-                className="w-11 h-11 rounded-full flex items-center justify-center text-white
-                  font-display text-lg font-semibold shrink-0"
-                style={{ backgroundColor: m.accentColor }}
-              >
-                {m.name.charAt(0).toUpperCase()}
-              </span>
+              <Avatar seed={m.id} color={m.accentColor} />
               <span className="flex-1 text-left">
                 <span className="block text-[0.95rem] font-medium text-text">{m.name}</span>
                 {m.hasAdminPasscode && (

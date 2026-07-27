@@ -4,6 +4,7 @@ import * as api from "../api";
 import { useToast } from "../components/Toast";
 import { usePushSubscription } from "../hooks/usePushSubscription";
 import { Icon } from "../components/Icon";
+import { Avatar } from "../components/Avatar";
 
 export function SettingsScreen({
   currentMemberId,
@@ -131,12 +132,11 @@ export function SettingsScreen({
             Profile
           </h3>
           <div className="flex items-center gap-3 mb-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-              style={{ backgroundColor: currentMember?.accentColor ?? "#6366f1" }}
-            >
-              {currentMember?.name.charAt(0).toUpperCase() ?? "?"}
-            </div>
+            <Avatar
+              seed={currentMember?.id ?? "unknown"}
+              color={currentMember?.accentColor ?? "#d97757"}
+              className="w-11 h-11"
+            />
             <div>
               <p className="font-medium text-text">{currentMember?.name ?? "Unknown"}</p>
               <p className="text-xs text-text-tertiary">Current profile</p>
@@ -154,12 +154,7 @@ export function SettingsScreen({
                       onClick={() => handleSwitchProfile(m)}
                       className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-sunken transition-colors"
                     >
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                        style={{ backgroundColor: m.accentColor }}
-                      >
-                        {m.name.charAt(0).toUpperCase()}
-                      </div>
+                      <Avatar seed={m.id} color={m.accentColor} className="w-8 h-8" />
                       <span className="flex-1 text-sm text-text">{m.name}</span>
                       {m.hasAdminPasscode && (
                         <Icon name="lock" className="w-3.5 h-3.5 text-text-tertiary" />
@@ -203,7 +198,9 @@ export function SettingsScreen({
           )}
         </section>
 
-        {/* Profile lock */}
+        {/* Profile lock. Superadmin only -- everyone else has no lock to manage,
+            so the section is absent rather than shown-and-disabled. */}
+        {currentMember?.isAdmin && (
         <section className="card p-4">
           <h3 className="eyebrow text-text-tertiary mb-3">Profile lock</h3>
 
@@ -275,6 +272,7 @@ export function SettingsScreen({
             </form>
           )}
         </section>
+        )}
 
         {/* Theme */}
         <section className="card p-4">

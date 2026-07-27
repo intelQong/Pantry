@@ -234,6 +234,23 @@ describe("locking your own profile after setup", () => {
     expect((await post("/api/profile/passcode", { passcode: "abc" }, cookie)).status).toBe(400);
   });
 
+  it("refuses to lock a profile that is not the household owner", async () => {
+    // The UI hides the control for non-owners; this is the rule behind it.
+    const login = cookieFrom(await post("/api/login", { passcode: "goodenough" }));
+    const { members } = await (await get("/api/session", login)).json<{ members: typeof admin[] }>();
+    const other = members.find((m) => !m.isAdmin)!;
+    const asOther = cookieFrom(await post("/api/profile", { memberId: other.id }, login));
+
+    const res = await post("/api/profile/passcode", { passcode: "sneaky123" }, asOther);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "not_admin" });
+
+    const row = await env.DB.prepare("SELECT admin_passcode_hash FROM member WHERE id = ?")
+      .bind(other.id)
+      .first<{ admin_passcode_hash: string | null }>();
+    expect(row?.admin_passcode_hash).toBeNull();
+  });
+
   it("refuses to set a lock from a device with no profile chosen", async () => {
     const houseOnly = cookieFrom(await post("/api/login", { passcode: "goodenough" }));
     expect((await post("/api/profile/passcode", { passcode: "abcd1234" }, houseOnly)).status).toBe(403);

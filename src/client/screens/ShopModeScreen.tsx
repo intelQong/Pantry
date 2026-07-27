@@ -23,6 +23,7 @@ export function ShopModeScreen({
   const [loading, setLoading] = useState(true);
   const [priceInputId, setPriceInputId] = useState<string | null>(null);
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
+  const [tracked, setTracked] = useState<Set<string>>(new Set());
   const [buying, setBuying] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -55,6 +56,38 @@ export function ShopModeScreen({
       wakeLockRef.current?.release().catch(() => {});
     };
   }, []);
+
+  /**
+   * Turns a free-text entry into a tracked pantry item.
+   *
+   * A custom entry has no item_id, so buying it resolves the row and records
+   * nothing -- correct, but it means anything added as free text never feeds
+   * the restock engine or the spend history. This closes that gap at the one
+   * moment the intent is obvious: just after buying it.
+   */
+  const handleTrack = useCallback(
+    async (item: ShopItem) => {
+      const name = item.displayName;
+      try {
+        const created = await api.createItem({ name, isStaple: true });
+        await api.addPurchase({
+          itemId: created.id,
+          qty: item.qty ?? 1,
+          priceTotal: item.priceTotal,
+        });
+        setTracked((prev) => new Set(prev).add(item.id));
+        toast(`Now tracking ${name}`);
+      } catch (err) {
+        // The commonest failure is a name that already exists in the pantry,
+        // which the API rejects on its unique index. Say so rather than "failed".
+        toast(
+          err instanceof api.ApiRequestError ? err.body.message : `Couldn't track ${name}`,
+          "error",
+        );
+      }
+    },
+    [toast],
+  );
 
   const boughtCount = items.filter((i) => i.bought).length;
   const totalItems = items.length;
@@ -209,6 +242,19 @@ export function ShopModeScreen({
                           <span className="text-sm text-text-tertiary ml-2">×{item.qty}</span>
                         )}
                       </div>
+
+                      {item.bought && item.itemId === null && !tracked.has(item.id) && (
+                        <button
+                          onClick={() => handleTrack(item)}
+                          className="shrink-0 px-2.5 py-1 rounded-full bg-accent-50 text-accent-700 text-xs font-medium hover:bg-accent-100 transition-colors"
+                        >
+                          Track it
+                        </button>
+                      )}
+
+                      {tracked.has(item.id) && (
+                        <span className="shrink-0 text-xs text-status-ok font-medium">Tracked</span>
+                      )}
 
                       {item.priceTotal !== null && (
                         <span className="text-sm font-medium text-text-secondary">

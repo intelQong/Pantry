@@ -245,13 +245,23 @@ auth.post("/profile/passcode", requireMember, async (c) => {
   }>();
 
   const member = await c.env.DB.prepare(
-    "SELECT admin_passcode_hash FROM member WHERE id = ? AND household_id = ?",
+    "SELECT admin_passcode_hash, is_admin FROM member WHERE id = ? AND household_id = ?",
   )
     .bind(session.memberId, session.householdId)
-    .first<{ admin_passcode_hash: string | null }>();
+    .first<{ admin_passcode_hash: string | null; is_admin: number }>();
 
   if (!member) {
     return c.json({ error: "unknown_member", message: "That profile no longer exists." }, 404);
+  }
+
+  // Only the household's superadmin profile can carry a lock. The UI hides the
+  // control for everyone else, but the check has to live here too -- a hidden
+  // button is not an access rule.
+  if (member.is_admin !== 1) {
+    return c.json(
+      { error: "not_admin", message: "Only the household owner's profile can be locked." },
+      403,
+    );
   }
 
   // Changing or removing an existing passcode requires proving you know it --
