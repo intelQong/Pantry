@@ -4,6 +4,7 @@ import * as api from "../api";
 import { PriceInput } from "../components/PriceInput";
 import { Icon } from "../components/Icon";
 import { formatMoney } from "../lib/money";
+import { parseQty } from "../lib/numbers";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { useToast } from "../components/Toast";
 
@@ -22,6 +23,7 @@ export function ShopModeScreen({
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceInputId, setPriceInputId] = useState<string | null>(null);
+  const [pendingQty, setPendingQty] = useState("");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
   const [buying, setBuying] = useState<Set<string>>(new Set());
@@ -96,14 +98,17 @@ export function ShopModeScreen({
   const allDone = totalItems > 0 && boughtCount === totalItems;
 
   const handleBuy = useCallback(
-    async (item: ShopItem, price: number | null = null) => {
+    async (item: ShopItem, price: number | null = null, qtyRaw = "") => {
       if (buying.has(item.id)) return;
       setBuying((prev) => new Set(prev).add(item.id));
       setPriceInputId(null);
 
       try {
+        // Blank falls back to whatever quantity was put on the list, and only
+        // then to one -- so confirming without typing changes nothing.
         await api.buyListEntry(item.id, {
           priceTotal: price,
+          qty: parseQty(qtyRaw, item.qty ?? 1),
         });
         setItems((prev) =>
           prev.map((i) =>
@@ -203,10 +208,11 @@ export function ShopModeScreen({
                       if (item.bought) return;
                       // Show price input on tap
                       if (priceInputId === item.id) {
-                        handleBuy(item, pendingPrice);
+                        handleBuy(item, pendingPrice, pendingQty);
                       } else {
                         setPriceInputId(item.id);
                         setPendingPrice(null);
+                        setPendingQty("");
                       }
                     }}
                     disabled={item.bought || buying.has(item.id)}
@@ -274,8 +280,19 @@ export function ShopModeScreen({
                       <div className="flex-1">
                         <PriceInput value={pendingPrice} onChange={setPendingPrice} />
                       </div>
+                      <div className="flex items-center gap-1.5 bg-surface-sunken rounded-lg px-3 py-2 shrink-0">
+                        <span className="text-text-tertiary text-sm">×</span>
+                        <input
+                          value={pendingQty}
+                          onChange={(e) => setPendingQty(e.target.value)}
+                          inputMode="decimal"
+                          placeholder={String(item.qty ?? 1)}
+                          aria-label="Quantity bought"
+                          className="w-10 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
+                        />
+                      </div>
                       <button
-                        onClick={() => handleBuy(item, pendingPrice)}
+                        onClick={() => handleBuy(item, pendingPrice, pendingQty)}
                         className="px-4 py-2 rounded-lg bg-accent-500 text-text-on-accent text-sm font-semibold active:scale-95 transition-transform"
                       >
                         Done
@@ -283,7 +300,7 @@ export function ShopModeScreen({
                       <button
                         onClick={() => {
                           setPriceInputId(null);
-                          handleBuy(item, null);
+                          handleBuy(item, null, "");
                         }}
                         className="px-3 py-2 rounded-lg bg-surface-raised border border-border text-sm text-text-secondary hover:text-text transition-colors"
                       >

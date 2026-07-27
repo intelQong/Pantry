@@ -3,6 +3,7 @@ import type { ListEntry, Category, ItemWithStatus } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
 import { suggest } from "../lib/catalog";
+import { parseQty } from "../lib/numbers";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../components/Toast";
@@ -18,6 +19,7 @@ export function ListScreen({
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [addQty, setAddQty] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,12 +66,18 @@ export function ListScreen({
         )
       : [];
 
+  const takeQty = useCallback(() => {
+    const qty = parseQty(addQty, 1);
+    setAddQty("");
+    return qty;
+  }, [addQty]);
+
   const handleAddItem = useCallback(
     async (itemId: string) => {
       setShowSuggestions(false);
       setQuery("");
       try {
-        const entry = await api.addToList({ itemId });
+        const entry = await api.addToList({ itemId, qty: takeQty() });
         setEntries((prev) => [...prev, entry]);
         toast("Added to list");
       } catch {
@@ -101,17 +109,19 @@ export function ListScreen({
 
       setShowSuggestions(false);
       setQuery("");
+      const qty = parseQty(addQty, 1);
+      setAddQty("");
 
       try {
         if (oneOff) {
-          const entry = await api.addToList({ customName: name });
+          const entry = await api.addToList({ customName: name, qty });
           setEntries((prev) => [...prev, entry]);
           toast(`${name} added just this once`);
           return;
         }
 
-        const item = await api.createItem({ name, isStaple: true });
-        const entry = await api.addToList({ itemId: item.id });
+        const item = await api.createItem({ name, isStaple: true, defaultQty: qty });
+        const entry = await api.addToList({ itemId: item.id, qty });
         setEntries((prev) => [...prev, entry]);
         setItems((prev) => [...prev, item as (typeof prev)[number]]);
         toast(`${name} added and now tracked`);
@@ -124,7 +134,7 @@ export function ListScreen({
         );
       }
     },
-    [query, toast],
+    [query, addQty, toast],
   );
 
   const handleDelete = useCallback(
@@ -185,6 +195,17 @@ export function ListScreen({
             }}
             placeholder="Add an item…"
             className="flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
+          />
+
+          {/* Quantity rides along with whichever add path is taken. Blank means
+              one, so the common case needs no interaction at all. */}
+          <input
+            value={addQty}
+            onChange={(e) => setAddQty(e.target.value)}
+            inputMode="decimal"
+            placeholder="qty"
+            aria-label="Quantity"
+            className="w-12 shrink-0 bg-transparent text-sm text-text text-right outline-none placeholder:text-text-tertiary"
           />
         </div>
 

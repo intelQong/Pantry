@@ -13,6 +13,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
   const [listItemIds, setListItemIds] = useState<Set<string>>(new Set());
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [cadence, setCadence] = useState<Cadence>("month");
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -57,6 +58,17 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
     if (!data) return [];
     return [...(cadence === "week" ? data.byWeek : data.byMonth)].reverse();
   }, [data, cadence]);
+
+  // All-time spend per item. Deliberately not scoped to the visible buckets:
+  // the API returns per-item totals across all history, and silently showing
+  // an all-time figure under a windowed heading would be worse than saying so.
+  const spentByItem = useMemo(
+    () =>
+      (data?.topItems ?? [])
+        .filter((u) => u.totalSpend > 0)
+        .sort((a, b) => b.totalSpend - a.totalSpend),
+    [data],
+  );
 
   const peak = Math.max(1, ...buckets.map((b) => b.spend));
   const periodTotal = buckets.reduce((sum, b) => sum + b.spend, 0);
@@ -127,12 +139,48 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
             </p>
           ) : (
             <>
-              <p className="numeral text-[2.25rem] leading-none font-semibold text-text">
-                {formatMoney(periodTotal)}
-              </p>
-              <p className="text-xs text-text-tertiary mt-1.5 mb-4">
-                Across the last {buckets.length} {cadence === "week" ? "weeks" : "months"}
-              </p>
+              {/* The total is the obvious thing to interrogate, so it is the
+                  control: tapping it breaks the figure down by item. */}
+              <button
+                onClick={() => setShowBreakdown((v) => !v)}
+                aria-expanded={showBreakdown}
+                className="text-left w-full group"
+              >
+                <span className="numeral block text-[2.25rem] leading-none font-semibold text-text">
+                  {formatMoney(periodTotal)}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-text-tertiary mt-1.5">
+                  Across the last {buckets.length} {cadence === "week" ? "weeks" : "months"}
+                  <Icon
+                    name="chevron"
+                    className={`w-3 h-3 transition-transform ${showBreakdown ? "rotate-90" : ""}`}
+                  />
+                </span>
+              </button>
+
+              {showBreakdown && (
+                <ul className="mt-3 mb-1 space-y-1.5 animate-fade-in">
+                  {spentByItem.length === 0 ? (
+                    <li className="text-xs text-text-tertiary">
+                      No priced purchases to break down yet.
+                    </li>
+                  ) : (
+                    spentByItem.map((u) => (
+                      <li key={u.itemId} className="flex items-baseline gap-3 text-sm">
+                        <span className="flex-1 min-w-0 truncate text-text">{u.name}</span>
+                        <span className="text-xs text-text-tertiary shrink-0">
+                          {u.purchases}×
+                        </span>
+                        <span className="numeral shrink-0 text-text">
+                          {formatMoney(u.totalSpend)}
+                        </span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+
+              <div className="mb-4" />
 
               {/* Bars are scaled to the highest bucket, so the shape of the
                   spending reads even when the absolute amounts are small. */}
