@@ -79,46 +79,19 @@ export function ListScreen({
     [toast],
   );
 
-  // Takes an explicit name for the catalogue suggestions: setQuery hasn't
-  // flushed by the time the handler runs, so reading state would add the
-  // half-typed query instead of the suggestion that was tapped.
-  /**
-   * Adds a name that isn't yet a pantry item.
-   *
-   * Creates the item first, then puts *that* on the list. Free text used to be
-   * the default here, which was a quiet trap: a free-text entry has no item_id,
-   * so buying it records no purchase, never updates last_purchased_at, and
-   * never reaches Pantry or Insights. Everything typed straight into this box
-   * vanished the moment it was ticked off.
-   *
-   * `oneOff` keeps the old behaviour for things genuinely not worth tracking,
-   * but it now has to be asked for rather than being what happens by default.
-   */
   const handleAddCustom = useCallback(
-    async (override?: string, oneOff = false) => {
+    async (override?: string) => {
       const name = (override ?? query).trim();
       if (!name) return;
 
       setShowSuggestions(false);
       setQuery("");
-      const qty = 1;
 
       try {
-        if (oneOff) {
-          const entry = await api.addToList({ customName: name, qty });
-          setEntries((prev) => [...prev, entry]);
-          toast(`${name} added just this once`);
-          return;
-        }
-
-        const item = await api.createItem({ name, isStaple: true, defaultQty: qty });
-        const entry = await api.addToList({ itemId: item.id, qty });
+        const entry = await api.addToList({ customName: name });
         setEntries((prev) => [...prev, entry]);
-        setItems((prev) => [...prev, item]);
-        toast(`${name} added and now tracked`);
+        toast(`${name} added to list`);
       } catch (err) {
-        // The usual failure is a name that already exists in the pantry, which
-        // the API rejects on its unique index. Say which, rather than "failed".
         toast(
           err instanceof api.ApiRequestError ? err.body.message : `Couldn't add ${name}`,
           "error",
@@ -236,15 +209,6 @@ export function ListScreen({
                 <span className="text-xs text-text-tertiary">new</span>
               </button>
             ))}
-
-            {query.trim() && (
-              <button
-                onClick={() => handleAddCustom(undefined, true)}
-                className="w-full text-left px-4 py-2 text-xs text-text-tertiary hover:bg-surface-sunken transition-colors border-t border-border-subtle"
-              >
-                Add without tracking it
-              </button>
-            )}
 
             {query.trim() && (
               <button

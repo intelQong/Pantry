@@ -42,10 +42,10 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
   const id = c.req.param("id");
 
   const entry = await c.env.DB.prepare(
-    "SELECT id, item_id, qty FROM list_entry WHERE id = ? AND household_id = ?",
+    "SELECT id, item_id, custom_name, qty FROM list_entry WHERE id = ? AND household_id = ?",
   )
     .bind(id, session.householdId)
-    .first<{ id: string; item_id: string | null; qty: number | null }>();
+    .first<{ id: string; item_id: string | null; custom_name: string | null; qty: number | null }>();
 
   if (!entry) {
     return c.json({ error: "not_found", message: "No such list entry." }, 404);
@@ -72,13 +72,39 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
   const stillPending = `EXISTS (SELECT 1 FROM list_entry
                                  WHERE id = ? AND household_id = ? AND status = 'pending')`;
 
-  // A custom_name entry has no item_id -- there's nothing to log a purchase
-  // against, so it just resolves off the list. That's expected, not a bug.
-  if (entry.item_id) {
+  // Custom_name entries get an item created at purchase time, so the item only
+  // enters the pantry when actually bought. The item_id is linked back to the
+  // list_entry within the same batch so the purchase rows reference it.
+  let itemIdForPurchase = entry.item_id;
+  if (!itemIdForPurchase && entry.custom_name) {
+    const newItemId = crypto.randomUUID();
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO item (id, household_id, name, created_by, created_at, last_purchased_at)
+         VALUES (?,?,?,?,?,?)`,
+      ).bind(newItemId, session.householdId, entry.custom_name, session.memberId, now, now).run();
+      itemIdForPurchase = newItemId;
+    } catch (err) {
+      const existing = await c.env.DB.prepare(
+        "SELECT id FROM item WHERE household_id = ? AND name = ? AND archived = 0",
+      ).bind(session.householdId, entry.custom_name).first<{ id: string }>();
+      if (!existing) throw err;
+      itemIdForPurchase = existing.id;
+    }
+
+    statements.push(
+      c.env.DB.prepare(
+        `UPDATE list_entry SET item_id = ?, custom_name = NULL
+          WHERE id = ? AND household_id = ? AND ${stillPending}`,
+      ).bind(itemIdForPurchase, id, session.householdId, id, session.householdId),
+    );
+  }
+
+  if (itemIdForPurchase) {
     const item = await c.env.DB.prepare(
       "SELECT unit, default_qty FROM item WHERE id = ? AND household_id = ?",
     )
-      .bind(entry.item_id, session.householdId)
+      .bind(itemIdForPurchase, session.householdId)
       .first<{ unit: string; default_qty: number }>();
 
     if (item) {
@@ -91,7 +117,7 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
         ).bind(
           purchaseId,
           session.householdId,
-          entry.item_id,
+          itemIdForPurchase,
           now,
           qty,
           item.unit,
@@ -104,7 +130,7 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
         c.env.DB.prepare(
           `UPDATE item SET last_purchased_at = ?
             WHERE id = ? AND household_id = ? AND ${stillPending}`,
-        ).bind(now, entry.item_id, session.householdId, id, session.householdId),
+        ).bind(now, itemIdForPurchase, session.householdId, id, session.householdId),
       );
     }
   }
@@ -133,8 +159,8 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
   // against the same item row, and folding it into the D1 batch above would
   // buy nothing (the batch already committed) while making the batch itself
   // harder to reason about.
-  if (entry.item_id) {
-    await relearnInterval(c.env.DB, entry.item_id, session.householdId);
+  if (itemIdForPurchase) {
+    await relearnInterval(c.env.DB, itemIdForPurchase, session.householdId);
   }
 
   return c.json({ ok: true, purchaseId, alreadyResolved: false });

@@ -174,22 +174,38 @@ describe("buying", () => {
     expect((await json(`/api/list/${entry2.id}/bought`, { priceTotal: -1 }, memberCookie)).status).toBe(400);
   });
 
-  it("buying a custom_name entry resolves it and creates no purchase row", async () => {
+  it("buying a custom_name entry creates an item and a purchase row", async () => {
     const add = await json("/api/list", { customName: "Napkins" }, memberCookie);
-    const entry = await add.json<{ id: string }>();
-
-    const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM purchase").first<{ n: number }>();
+    const entry = await add.json<{ id: string; itemId: string | null }>();
+    expect(entry.itemId).toBeNull();
 
     const res = await json(`/api/list/${entry.id}/bought`, { priceTotal: 500 }, memberCookie);
     expect(res.status).toBe(200);
+    const { purchaseId } = await res.json<{ purchaseId: string }>();
+    expect(purchaseId).not.toBeNull();
 
-    const listRow = await env.DB.prepare("SELECT status FROM list_entry WHERE id = ?")
+    // List entry is resolved and linked to the new item
+    const listRow = await env.DB.prepare(
+      "SELECT status, item_id FROM list_entry WHERE id = ?",
+    )
       .bind(entry.id)
-      .first<{ status: string }>();
+      .first<{ status: string; item_id: string | null }>();
     expect(listRow?.status).toBe("bought");
+    expect(listRow?.item_id).not.toBeNull();
 
-    const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM purchase").first<{ n: number }>();
-    expect(after?.n).toBe(before?.n);
+    // Item was created
+    const itemRow = await env.DB.prepare("SELECT name FROM item WHERE id = ?")
+      .bind(listRow!.item_id!)
+      .first<{ name: string }>();
+    expect(itemRow?.name).toBe("Napkins");
+
+    // Purchase was recorded
+    const purchaseRow = await env.DB.prepare(
+      "SELECT item_id, price_total FROM purchase WHERE id = ?",
+    )
+      .bind(purchaseId)
+      .first<{ item_id: string; price_total: number | null }>();
+    expect(purchaseRow).toMatchObject({ item_id: listRow!.item_id, price_total: 500 });
   });
 
   it("404s buying a list entry that doesn't exist", async () => {
