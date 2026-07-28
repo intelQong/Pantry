@@ -23,7 +23,7 @@ export default defineConfig({
           SESSION_SECRET: "test-secret-not-used-in-production",
           VAPID_PUBLIC_KEY: vapidKeys.publicKey,
           VAPID_PRIVATE_KEY: vapidKeys.privateKey,
-          VAPID_SUBJECT: "mailto:mahmudulhk13@gmail.com",
+          VAPID_SUBJECT: "mailto:you@example.com",
         },
       },
     }),

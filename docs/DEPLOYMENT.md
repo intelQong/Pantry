@@ -1,7 +1,6 @@
 # Deployment
 
-**Live at https://pantry.intelqong.workers.dev** (account `intelqong`, D1 `pantry-db`
-`61c4a9c1-dda5-4e3f-ac6e-19087f0fdd35`, region APAC, cron `0 * * * *` registered).
+The steps below are the original first-time path, kept for reference / rebuilding.
 
 Secrets are set in Cloudflare and mirrored locally in `.dev.vars` (gitignored) so
 `wrangler dev` works. **Keep the VAPID pair — rotating it invalidates every existing
@@ -10,8 +9,6 @@ subscription and both phones would have to re-subscribe.**
 Redeploy with `npm run deploy`. Note that assets take ~1 minute to propagate to every
 edge PoP; 404s on `/`, `/sw.js`, or `/manifest.json` immediately after a deploy are
 expected and resolve on their own.
-
-The steps below are the original first-time path, kept for reference / rebuilding.
 
 ```bash
 export PATH="$HOME/.nvm/versions/node/v22.23.0/bin:$PATH"
@@ -57,7 +54,7 @@ node -e "import('web-push-neo').then(async m => console.log(JSON.stringify(await
 ```bash
 npx wrangler secret put VAPID_PUBLIC_KEY
 npx wrangler secret put VAPID_PRIVATE_KEY
-npx wrangler secret put VAPID_SUBJECT     # e.g. mailto:mahmudulhk13@gmail.com
+npx wrangler secret put VAPID_SUBJECT     # e.g. mailto:you@example.com
 ```
 
 The **public** key must also reach the client, which passes it to

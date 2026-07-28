@@ -130,7 +130,7 @@ describe("web push wire format", () => {
 
     const details = await generateRequestDetails(ua.subscription, payload, {
       vapidDetails: {
-        subject: "mailto:mahmudulhk13@gmail.com",
+        subject: "mailto:you@example.com",
         publicKey: vapid.publicKey,
         privateKey: vapid.privateKey,
       },
@@ -148,7 +148,7 @@ describe("web push wire format", () => {
 
     const details = await generateRequestDetails(ua.subscription, "hello", {
       vapidDetails: {
-        subject: "mailto:mahmudulhk13@gmail.com",
+        subject: "mailto:you@example.com",
         publicKey: vapid.publicKey,
         privateKey: vapid.privateKey,
       },
@@ -168,7 +168,7 @@ describe("web push wire format", () => {
 
     const details = await generateRequestDetails(ua.subscription, "hello", {
       vapidDetails: {
-        subject: "mailto:mahmudulhk13@gmail.com",
+        subject: "mailto:you@example.com",
         publicKey: vapid.publicKey,
         privateKey: vapid.privateKey,
       },
@@ -189,7 +189,7 @@ describe("web push wire format", () => {
       ),
     );
     expect(claims.aud).toBe("https://web.push.apple.com");
-    expect(claims.sub).toBe("mailto:mahmudulhk13@gmail.com");
+    expect(claims.sub).toBe("mailto:you@example.com");
     expect(claims.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
@@ -198,7 +198,7 @@ describe("web push wire format", () => {
     const ua = await createFakeSubscription();
     const opts = {
       vapidDetails: {
-        subject: "mailto:mahmudulhk13@gmail.com",
+        subject: "mailto:you@example.com",
         publicKey: vapid.publicKey,
         privateKey: vapid.privateKey,
       },
