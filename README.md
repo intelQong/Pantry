@@ -14,6 +14,12 @@ Ticking an item off the shop list is the only data entry in the system. That sin
 - **Insights** — consumption rhythm, monthly spend, spend by category, price trends. All built from existing purchase data.
 - **PWA** — installable on both phones, works with Safari and Chrome, delivers push notifications without a native app.
 
+## Screenshots
+
+| Home page | Insights |
+|---|---|
+| ![Home page](screenshots/home.png) | ![Insights](screenshots/insights.png) |
+
 ## Architecture
 
 ```
