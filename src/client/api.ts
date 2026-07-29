@@ -23,17 +23,54 @@ class ApiRequestError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const opts: RequestInit = {
-    method,
+function options(body?: unknown): RequestInit {
+  return {
+    method: "GET",
     credentials: "same-origin",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   };
-  const res = await fetch(`/api${path}`, opts);
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, { ...options(body), method });
   const data = await res.json();
   if (!res.ok) throw new ApiRequestError(res.status, data as ApiError);
   return data as T;
+}
+
+export interface RawResult {
+  /** The HTTP status, or null when the request never reached a server at all. */
+  status: number | null;
+  body: unknown;
+}
+
+/**
+ * Like `request`, but reports the outcome instead of throwing.
+ *
+ * The offline queue has to tell "the server rejected this" from "there was no
+ * server", because the first means drop the operation and the second means keep
+ * it and try again later. A thrown error flattens that distinction at exactly
+ * the moment it matters, so the queue sends through this instead.
+ */
+export async function rawRequest(method: string, path: string, body?: unknown): Promise<RawResult> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { ...options(body), method });
+  } catch {
+    return { status: null, body: null };
+  }
+
+  // A 204, or an error page from something in front of the Worker, is not JSON.
+  // The status is what the queue acts on, so a missing body is not a failure.
+  let parsed: unknown = null;
+  try {
+    parsed = await res.json();
+  } catch {
+    parsed = null;
+  }
+
+  return { status: res.status, body: parsed };
 }
 
 /* ------------------------------------------------------------------ */

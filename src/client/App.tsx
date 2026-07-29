@@ -3,7 +3,10 @@ import type { Member, Category } from "@shared/types";
 import * as api from "./api";
 import type { SessionResponse } from "./api";
 import { useRouter } from "./hooks/useRouter";
+import { readSnapshot, writeSnapshot, isOffline } from "./lib/cache";
 import { ToastProvider } from "./components/Toast";
+import { OutboxProvider } from "./components/Outbox";
+import { SyncBanner } from "./components/SyncBanner";
 import { Shell } from "./components/Shell";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { SetupScreen } from "./screens/SetupScreen";
@@ -22,6 +25,14 @@ type AppState =
   | { phase: "login"; householdName: string; members: Member[] }
   | { phase: "pick_profile"; members: Member[] }
   | { phase: "ready"; memberId: string; members: Member[]; householdName: string };
+
+/** Everything needed to open the app again without asking the server. */
+interface SessionSnapshot {
+  memberId: string;
+  members: Member[];
+  householdName: string;
+  categories: Category[];
+}
 
 // Restore saved theme on load
 function applyStoredTheme() {
@@ -63,14 +74,33 @@ export function App() {
       const cats = await api.getCategories();
       setCategories(cats);
 
-      setState({
-        phase: "ready",
+      const ready = {
         memberId: session.memberId,
         members: session.members ?? [],
         householdName: session.householdName ?? "Home",
-      });
-    } catch {
-      // If we can't reach the API, try login screen
+      };
+      writeSnapshot<SessionSnapshot>("session", { ...ready, categories: cats });
+      setState({ phase: "ready", ...ready });
+    } catch (err) {
+      // A failure with an HTTP status behind it is a real answer -- a dead
+      // session, a household that no longer exists -- and still means log in.
+      //
+      // A failure with no status means the request never left the phone, which
+      // is the normal state in a shop. Sending someone to a login screen they
+      // cannot complete would put the app out of reach at exactly the moment
+      // they walked in to use it, so the last known session opens instead.
+      const snapshot = isOffline(err) ? readSnapshot<SessionSnapshot>("session") : null;
+      if (snapshot) {
+        setCategories(snapshot.value.categories);
+        setState({
+          phase: "ready",
+          memberId: snapshot.value.memberId,
+          members: snapshot.value.members,
+          householdName: snapshot.value.householdName,
+        });
+        return;
+      }
+
       setState({ phase: "login", householdName: "Home", members: [] });
     }
   }, []);
@@ -99,6 +129,8 @@ export function App() {
       )}
 
       {state.phase === "ready" && (
+        <OutboxProvider>
+        <SyncBanner />
         <Shell route={route} navigate={navigate}>
           {route.page === "today" && (
             <TodayScreen
@@ -122,6 +154,7 @@ export function App() {
             />
           )}
         </Shell>
+        </OutboxProvider>
       )}
     </ToastProvider>
   );

@@ -4,6 +4,8 @@ import * as api from "../api";
 import { Icon, type IconName } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { useToast } from "../components/Toast";
+import { useOutbox } from "../components/Outbox";
+import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
 import { pickSplash, greeting } from "../lib/splashes";
 
 type UrgencyGroup = "overdue" | "due" | "due_soon";
@@ -38,8 +40,10 @@ export function TodayScreen({
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [listCount, setListCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [stale, setStale] = useState(false);
   const [adding, setAdding] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+  const { queueAdd } = useOutbox();
 
   // Rerolled once per mount, the way Minecraft rerolls per launch.
   const splash = useMemo(() => pickSplash(), []);
@@ -50,8 +54,23 @@ export function TodayScreen({
   const load = useCallback(async () => {
     try {
       const [today, list] = await Promise.all([api.getToday(), api.getList()]);
+      writeSnapshot("today", today);
+      writeSnapshot("list", list);
       setItems(today);
       setListCount(list.length);
+      setStale(false);
+    } catch (err) {
+      // This is the landing screen, so with no connection it is the first thing
+      // seen. An empty one reads as "the app is broken" rather than "the phone
+      // has no signal", which is why it shows the last known pantry instead --
+      // labelled, so nothing here is mistaken for live.
+      if (!isOffline(err)) throw err;
+      const cached = readSnapshot<ItemWithStatus[]>("today");
+      if (cached) {
+        setItems(cached.value);
+        setListCount(readSnapshot<unknown[]>("list")?.value.length ?? 0);
+        setStale(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -65,12 +84,12 @@ export function TodayScreen({
     async (item: ItemWithStatus) => {
       setAdding((prev) => new Set(prev).add(item.id));
       try {
-        await api.addToList({ itemId: item.id });
+        // Queued rather than sent, same as the shop list's own add box, so
+        // remembering something with no signal still works.
+        queueAdd({ itemId: item.id });
         setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, onList: true } : i)));
         setListCount((n) => n + 1);
         toast(`${item.name} added to list`);
-      } catch {
-        toast("Couldn't add that one", "error");
       } finally {
         setAdding((prev) => {
           const next = new Set(prev);
@@ -79,7 +98,7 @@ export function TodayScreen({
         });
       }
     },
-    [toast],
+    [toast, queueAdd],
   );
 
   if (loading) return <LoadingSpinner />;
@@ -96,16 +115,16 @@ export function TodayScreen({
     <div className="safe-top pb-6">
       {/* Greeting ------------------------------------------------------- */}
       <header className="px-5 pt-7 pb-6">
-        <p className="eyebrow text-text-tertiary mb-2">
+        <p className="eyebrow mb-2">
           {new Date().toLocaleDateString(undefined, {
             weekday: "long",
             day: "numeric",
             month: "long",
           })}
         </p>
-        <h1 className="font-display text-[1.75rem] leading-tight font-bold text-text">
+        <h1 className="screen-title">
           {hello},{" "}
-          <span className="text-accent-500">{memberName}</span>
+          <span className="text-accent-text">{memberName}</span>
         </h1>
         <p className="splash mt-2.5">{splash}</p>
       </header>
@@ -114,9 +133,12 @@ export function TodayScreen({
         {/* Pantry tally ------------------------------------------------- */}
         <section className="card p-4">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="eyebrow text-text-tertiary">Pantry</h2>
+            <h2 className="eyebrow">Pantry</h2>
+            {/* Due dates move with the clock, so a cached pantry goes wrong
+                quietly. Better to say the numbers are old than to show them
+                as though they were checked just now. */}
             <span className="numeral text-sm text-text-secondary">
-              {total} {total === 1 ? "staple" : "staples"}
+              {stale ? "Last seen offline" : `${total} ${total === 1 ? "staple" : "staples"}`}
             </span>
           </div>
 
@@ -125,7 +147,7 @@ export function TodayScreen({
               Nothing tracked yet.{" "}
               <button
                 onClick={() => onNavigate("pantry")}
-                className="text-accent-500 font-medium underline underline-offset-2"
+                className="text-accent-text font-medium underline underline-offset-2"
               >
                 Add your staples
               </button>{" "}
@@ -167,7 +189,7 @@ export function TodayScreen({
           onClick={() => onNavigate("list")}
           className="w-full flex items-center gap-3 card p-4 text-left hover:border-border transition-colors active:scale-[0.99]"
         >
-          <span className="shrink-0 w-9 h-9 rounded-xl bg-accent-50 text-accent-600 flex items-center justify-center">
+          <span className="shrink-0 w-9 h-9 rounded-xl bg-accent-50 text-accent-text flex items-center justify-center">
             <Icon name="basket" />
           </span>
           <span className="flex-1 min-w-0">
@@ -196,7 +218,7 @@ export function TodayScreen({
           )
         ) : (
           <section className="pt-2">
-            <h2 className="eyebrow text-text-tertiary px-1 mb-2">
+            <h2 className="eyebrow px-1 mb-2">
               Needs attention · {urgent.length}
             </h2>
 
@@ -248,7 +270,7 @@ export function TodayScreen({
                               onClick={() => handleAdd(item)}
                               disabled={adding.has(item.id)}
                               aria-label={`Add ${item.name} to shop list`}
-                              className="shrink-0 w-9 h-9 rounded-lg bg-surface-sunken text-text-secondary flex items-center justify-center hover:bg-accent-50 hover:text-accent-600 active:scale-90 transition-all disabled:opacity-40"
+                              className="shrink-0 w-9 h-9 rounded-lg bg-surface-sunken text-text-secondary flex items-center justify-center hover:bg-accent-50 hover:text-accent-text active:scale-90 transition-all disabled:opacity-40"
                             >
                               <Icon name="plus" className="w-4 h-4" strokeWidth={2.25} />
                             </button>

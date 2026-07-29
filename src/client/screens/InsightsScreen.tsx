@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
 import { formatMoney } from "../lib/money";
+import { isOffline } from "../lib/cache";
 
 type Cadence = "week" | "month";
 
@@ -15,18 +16,29 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
   const [cadence, setCadence] = useState<Cadence>("month");
   const [showBreakdown, setShowBreakdown] = useState(false);
 
+  const [unreachable, setUnreachable] = useState(false);
+
   useEffect(() => {
     const load = async () => {
-      const [all, list, insights] = await Promise.all([
-        api.getItems(),
-        api.getList(),
-        api.getInsights(),
-      ]);
-      setItems(all);
-      setListItemIds(
-        new Set(list.map((e) => e.itemId).filter((id): id is string => id !== null)),
-      );
-      setData(insights);
+      try {
+        const [all, list, insights] = await Promise.all([
+          api.getItems(),
+          api.getList(),
+          api.getInsights(),
+        ]);
+        setItems(all);
+        setListItemIds(
+          new Set(list.map((e) => e.itemId).filter((id): id is string => id !== null)),
+        );
+        setData(insights);
+      } catch (err) {
+        // Every figure on this screen is aggregated server-side over the whole
+        // purchase history, so there is nothing meaningful to cache: a stale
+        // spend total looks exactly like a current one and would be believed.
+        // Saying the screen needs a connection is the only honest option.
+        if (!isOffline(err)) throw err;
+        setUnreachable(true);
+      }
     };
     load();
   }, []);
@@ -73,13 +85,28 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
   const peak = Math.max(1, ...buckets.map((b) => b.spend));
   const periodTotal = buckets.reduce((sum, b) => sum + b.spend, 0);
 
+  if (unreachable) {
+    return (
+      <div className="safe-top">
+        <header className="px-5 pt-7 pb-5">
+          <h1 className="screen-title">Insights</h1>
+        </header>
+        <EmptyState
+          icon="cloud-off"
+          title="Insights need a connection"
+          subtitle="Spending and consumption are worked out from your whole purchase history. Everything you buy offline is saved and counted once you're back on."
+        />
+      </div>
+    );
+  }
+
   if (!items || !data) return <LoadingSpinner />;
 
   if (stats && stats.active.length === 0) {
     return (
       <div className="safe-top">
         <header className="px-5 pt-7 pb-5">
-          <h1 className="font-display text-[1.75rem] font-semibold text-text">Insights</h1>
+          <h1 className="screen-title">Insights</h1>
         </header>
         <EmptyState
           icon="chart"
@@ -95,7 +122,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
   return (
     <div className="safe-top pb-6">
       <header className="px-5 pt-7 pb-5">
-        <h1 className="font-display text-[1.75rem] font-semibold text-text">Insights</h1>
+        <h1 className="screen-title">Insights</h1>
         <p className="text-sm text-text-secondary mt-1">
           {stats.active.length} tracked · {data.totalPurchases}{" "}
           {data.totalPurchases === 1 ? "purchase" : "purchases"} logged
@@ -106,7 +133,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
         {/* Spend ---------------------------------------------------------- */}
         <section className="card p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="eyebrow text-text-tertiary">Spending</h2>
+            <h2 className="eyebrow">Spending</h2>
 
             <div className="flex rounded-lg bg-surface-sunken p-0.5" role="group">
               {(["week", "month"] as Cadence[]).map((c) => (
@@ -217,7 +244,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
         {/* Usage ---------------------------------------------------------- */}
         {data.topItems.length > 0 && (
           <section className="card p-4">
-            <h2 className="eyebrow text-text-tertiary mb-3">What you get through</h2>
+            <h2 className="eyebrow mb-3">What you get through</h2>
             <ul className="space-y-2.5">
               {data.topItems.slice(0, 8).map((u) => (
                 <li key={u.itemId} className="flex items-baseline gap-3">
@@ -247,7 +274,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
         {/* Spend by category ---------------------------------------------- */}
         {data.byCategory.some((c) => c.spend > 0) && (
           <section className="card p-4">
-            <h2 className="eyebrow text-text-tertiary mb-3">Where it goes</h2>
+            <h2 className="eyebrow mb-3">Where it goes</h2>
             <ul className="space-y-2">
               {data.byCategory
                 .filter((c) => c.spend > 0)
@@ -276,7 +303,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
 
         {/* Next shop estimate --------------------------------------------- */}
         <section className="card p-4">
-          <h2 className="eyebrow text-text-tertiary mb-2">Next shop, roughly</h2>
+          <h2 className="eyebrow mb-2">Next shop, roughly</h2>
           <p className="numeral text-[1.75rem] leading-none font-semibold text-text">
             {stats.priced.length > 0 ? formatMoney(stats.estimate) : "—"}
           </p>
@@ -292,7 +319,7 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
         {/* Pantry composition --------------------------------------------- */}
         {stats.byCategory.length > 0 && (
           <section className="card p-4">
-            <h2 className="eyebrow text-text-tertiary mb-3">What's in the pantry</h2>
+            <h2 className="eyebrow mb-3">What's in the pantry</h2>
             <ul className="space-y-2">
               {stats.byCategory.map((c) => (
                 <li key={c.id} className="flex items-center gap-3">

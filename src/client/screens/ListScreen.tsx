@@ -4,9 +4,12 @@ import * as api from "../api";
 import { Icon } from "../components/Icon";
 import { suggest } from "../lib/catalog";
 import { parseQty } from "../lib/numbers";
+import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
+import type { OutboxOp } from "../lib/outbox";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../components/Toast";
+import { useOutbox } from "../components/Outbox";
 
 export function ListScreen({
   categories,
@@ -21,6 +24,7 @@ export function ListScreen({
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { toast } = useToast();
+  const { online, queue, queueAdd, cancelQueued } = useOutbox();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const catMap = new Map(categories.map((c) => [c.id, c]));
@@ -28,16 +32,58 @@ export function ListScreen({
   const fetchAll = useCallback(async () => {
     try {
       const [listData, itemsData] = await Promise.all([api.getList(), api.getItems()]);
+      writeSnapshot("list", listData);
+      writeSnapshot("items", itemsData);
       setEntries(listData);
       setItems(itemsData);
+    } catch (err) {
+      if (!isOffline(err)) throw err;
+      setEntries(readSnapshot<ListEntry[]>("list")?.value ?? []);
+      setItems(readSnapshot<Item[]>("items")?.value ?? []);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Refetches when the queue empties, which covers both the first load and the
+  // moment a sync finishes -- that is when the server first has rows for the
+  // adds this screen has been showing from the queue.
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    if (online && queue.length === 0) fetchAll();
+  }, [fetchAll, online, queue.length]);
+
+  // Adds that have not reached the server yet, shown alongside the real ones.
+  // Matched on clientId so a synced entry replaces its queued twin instead of
+  // appearing twice in the gap before the refetch lands.
+  const synced = new Set(entries.map((e) => e.clientId).filter(Boolean));
+  const pendingAdds: ListEntry[] = queue
+    .filter((op): op is Extract<OutboxOp, { kind: "add" }> => op.kind === "add")
+    .filter((op) => !synced.has(op.id))
+    .map((op) => ({
+      id: op.id,
+      itemId: op.itemId,
+      customName: op.customName,
+      displayName:
+        op.customName ?? items.find((i) => i.id === op.itemId)?.name ?? "New item",
+      categoryId: op.itemId ? (items.find((i) => i.id === op.itemId)?.categoryId ?? null) : null,
+      qty: op.qty,
+      note: null,
+      addedBy: null,
+      addedAt: op.createdAt,
+      status: "pending",
+      clientId: op.id,
+    }));
+
+  const allEntries = [...entries, ...pendingAdds];
+
+  // A row is still unsent while the add that created it is in the queue. Keyed
+  // on the operation id rather than on which list the row came from, because an
+  // optimistic row lives in `entries` and a row restored after a reload lives
+  // in `pendingAdds` -- both are equally not-yet-on-the-server.
+  const queuedAddIds = new Set(
+    queue.filter((op) => op.kind === "add").map((op) => op.id),
+  );
+  const isPending = (id: string) => queuedAddIds.has(id);
 
   // Filter items for quick-add suggestions
   const suggestions = query.trim().length >= 1
@@ -45,7 +91,7 @@ export function ListScreen({
         .filter(
           (i) =>
             i.name.toLowerCase().includes(query.toLowerCase()) &&
-            !entries.some((e) => e.itemId === i.id),
+            !allEntries.some((e) => e.itemId === i.id),
         )
         .slice(0, 5)
     : [];
@@ -58,47 +104,73 @@ export function ListScreen({
           query,
           new Set([
             ...items.map((i) => i.name.toLowerCase()),
-            ...entries.map((e) => e.displayName.toLowerCase()),
+            ...allEntries.map((e) => e.displayName.toLowerCase()),
           ]),
           4,
         )
       : [];
 
+  // Both add paths go through the queue rather than straight to the API. It
+  // sends immediately when there is a connection, so online behaviour is
+  // unchanged, and holds the add until there is one when there isn't --
+  // which is the point, since half of what goes on this list gets remembered
+  // standing in the aisle.
+  /**
+   * Shows the row straight away, keyed to the operation that will create it.
+   *
+   * Without this the row would blink: the queued add disappears from the queue
+   * the moment it is sent, and the refetch that brings back the real row lands
+   * a moment later. Carrying it in `entries` under its clientId means the
+   * refetch replaces it in place instead of the row vanishing in between.
+   */
+  const showOptimistically = useCallback(
+    (op: OutboxOp & { kind: "add" }, displayName: string, categoryId: string | null) => {
+      setEntries((prev) => [
+        ...prev,
+        {
+          id: op.id,
+          itemId: op.itemId,
+          customName: op.customName,
+          displayName,
+          categoryId,
+          qty: op.qty,
+          note: null,
+          addedBy: null,
+          addedAt: op.createdAt,
+          status: "pending",
+          clientId: op.id,
+        },
+      ]);
+    },
+    [],
+  );
+
   const handleAddItem = useCallback(
-    async (itemId: string) => {
+    (itemId: string) => {
       setShowSuggestions(false);
       setQuery("");
-      try {
-        const entry = await api.addToList({ itemId });
-        setEntries((prev) => [...prev, entry]);
-        toast("Added to list");
-      } catch {
-        toast("Failed to add", "error");
+      const item = items.find((i) => i.id === itemId);
+      const op = queueAdd({ itemId });
+      if (op.kind === "add") {
+        showOptimistically(op, item?.name ?? "New item", item?.categoryId ?? null);
       }
+      toast("Added to list");
     },
-    [toast],
+    [items, queueAdd, showOptimistically, toast],
   );
 
   const handleAddCustom = useCallback(
-    async (override?: string) => {
+    (override?: string) => {
       const name = (override ?? query).trim();
       if (!name) return;
 
       setShowSuggestions(false);
       setQuery("");
-
-      try {
-        const entry = await api.addToList({ customName: name });
-        setEntries((prev) => [...prev, entry]);
-        toast(`${name} added to list`);
-      } catch (err) {
-        toast(
-          err instanceof api.ApiRequestError ? err.body.message : `Couldn't add ${name}`,
-          "error",
-        );
-      }
+      const op = queueAdd({ customName: name });
+      if (op.kind === "add") showOptimistically(op, name, null);
+      toast(`${name} added to list`);
     },
-    [query, toast],
+    [query, queueAdd, showOptimistically, toast],
   );
 
   /** Commits the quantity typed on a row. Blank clears it back to unspecified. */
@@ -108,28 +180,43 @@ export function ListScreen({
       const qty = trimmed === "" ? null : parseQty(trimmed, 1);
       if (qty === previous) return; // nothing typed, or typed back to the same
 
+      // A row that has not synced has no server id to PATCH. Editing it is not
+      // worth a queued operation of its own -- it can just be removed and
+      // re-added -- so say what is true rather than dropping the keystrokes.
+      if (isPending(id)) {
+        toast("Set the quantity once this has synced", "info");
+        return;
+      }
+
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, qty } : e)));
       try {
         await api.updateListEntry(id, { qty });
-      } catch {
-        toast("Couldn't save the quantity", "error");
+      } catch (err) {
+        toast(isOffline(err) ? "Quantities need a connection" : "Couldn't save the quantity", "error");
         fetchAll();
       }
     },
-    [toast, fetchAll],
+    [toast, fetchAll, isPending],
   );
 
   const handleDelete = useCallback(
     async (id: string) => {
+      // Removing something added moments ago and not yet sent just drops the
+      // queued operation -- there is nothing on the server to delete.
+      if (isPending(id)) {
+        cancelQueued(id);
+        return;
+      }
+
       setEntries((prev) => prev.filter((e) => e.id !== id));
       try {
         await api.deleteListEntry(id);
-      } catch {
-        toast("Failed to remove", "error");
+      } catch (err) {
+        toast(isOffline(err) ? "Removing needs a connection" : "Failed to remove", "error");
         fetchAll();
       }
     },
-    [toast, fetchAll],
+    [toast, fetchAll, isPending, cancelQueued],
   );
 
   if (loading) return <LoadingSpinner />;
@@ -137,7 +224,7 @@ export function ListScreen({
   // Group entries by category
   const grouped: { cat: Category | null; entries: ListEntry[] }[] = [];
   const byCategory = new Map<string | null, ListEntry[]>();
-  for (const e of entries) {
+  for (const e of allEntries) {
     const key = e.categoryId ?? "__none__";
     if (!byCategory.has(key)) byCategory.set(key, []);
     byCategory.get(key)!.push(e);
@@ -153,9 +240,9 @@ export function ListScreen({
   return (
     <div className="safe-top">
       <header className="px-5 pt-6 pb-2">
-        <h1 className="font-display text-[1.75rem] font-semibold text-text">Shop List</h1>
+        <h1 className="screen-title">Shop List</h1>
         <p className="text-sm text-text-secondary mt-0.5">
-          {entries.length} item{entries.length !== 1 ? "s" : ""} to buy
+          {allEntries.length} item{allEntries.length !== 1 ? "s" : ""} to buy
         </p>
       </header>
 
@@ -213,7 +300,7 @@ export function ListScreen({
             {query.trim() && (
               <button
                 onClick={() => handleAddCustom()}
-                className="w-full text-left px-4 py-2.5 text-sm font-medium text-accent-600 hover:bg-surface-sunken transition-colors border-t border-border-subtle"
+                className="w-full text-left px-4 py-2.5 text-sm font-medium text-accent-text hover:bg-surface-sunken transition-colors border-t border-border-subtle"
               >
                 Add "{query.trim()}"
               </button>
@@ -222,7 +309,7 @@ export function ListScreen({
         )}
       </div>
 
-      {entries.length === 0 ? (
+      {allEntries.length === 0 ? (
         <EmptyState
           icon="basket"
           title="List is empty"
@@ -233,7 +320,7 @@ export function ListScreen({
           <div className="px-4 space-y-4 pb-4">
             {grouped.map(({ cat, entries: groupEntries }) => (
               <section key={cat?.id ?? "none"}>
-                <h3 className="flex items-center gap-2 eyebrow text-text-tertiary px-1 mb-2">
+                <h3 className="flex items-center gap-2 eyebrow px-1 mb-2">
                   {cat && (
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
                   )}
@@ -246,8 +333,18 @@ export function ListScreen({
                       className="flex items-center gap-3 px-3 py-2.5 card-row"
                     >
                       <span className="flex-1 min-w-0">
-                        <span className="block text-sm font-medium text-text truncate">
-                          {entry.displayName}
+                        <span className="flex items-center gap-1.5">
+                          <span className="block text-sm font-medium text-text truncate">
+                            {entry.displayName}
+                          </span>
+                          {/* On the list, but not yet on the server. */}
+                          {isPending(entry.id) && (
+                            <Icon
+                              name="cloud-off"
+                              className="w-3.5 h-3.5 text-text-tertiary shrink-0"
+                              strokeWidth={1.75}
+                            />
+                          )}
                         </span>
                         {entry.note && (
                           <span className="block text-xs text-text-tertiary mt-0.5 truncate">

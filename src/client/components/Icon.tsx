@@ -30,6 +30,9 @@ const PATHS = {
   search: "M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Zm4.8.3L20 21.5",
   sliders: "M4 7h9m3 0h4M4 17h4m3 0h9M14 4.5v5M9 14.5v5",
   logout: "M15 16.5V19a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 4 19V5a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 15 5v2.5M9.5 12H20m0 0-3-3m3 3-3 3",
+  refresh: "M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5",
+  // A cloud struck through, for "this is saved here, not there".
+  "cloud-off": "M4 4l16 16M7.5 18.5h9a4 4 0 0 0 1.6-7.7A6 6 0 0 0 9.2 7.2M6.6 9.6a4.5 4.5 0 0 0 .9 8.9",
 } as const;
 
 export type IconName = keyof typeof PATHS;

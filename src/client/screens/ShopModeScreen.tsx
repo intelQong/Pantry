@@ -5,12 +5,57 @@ import { PriceInput } from "../components/PriceInput";
 import { Icon } from "../components/Icon";
 import { formatMoney } from "../lib/money";
 import { parseQty } from "../lib/numbers";
+import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
+import type { OutboxOp } from "../lib/outbox";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { useToast } from "../components/Toast";
+import { useOutbox } from "../components/Outbox";
 
 interface ShopItem extends ListEntry {
   bought: boolean;
+  /**
+   * Decided against, rather than bought.
+   *
+   * A distinct state and not just "bought with no price": skipping resolves the
+   * list entry without writing a purchase, so it leaves last_purchased_at and
+   * the learned interval alone. Recording a skip as a purchase would teach the
+   * engine you restock things you deliberately walked past.
+   */
+  skipped: boolean;
   priceTotal: number | null;
+}
+
+/** Decided, either way — what the progress bar and the card state key off. */
+const isResolved = (item: ShopItem) => item.bought || item.skipped;
+
+/**
+ * An item added while offline, shown alongside the fetched list.
+ *
+ * The queued operation's own id stands in as the entry id until it syncs, which
+ * is what lets it be ticked off in the same trip: the buy queues against this
+ * id, and the drain repoints it once the add comes back with a real one.
+ */
+function pendingAddToEntry(op: Extract<OutboxOp, { kind: "add" }>): ListEntry {
+  return {
+    id: op.id,
+    itemId: op.itemId,
+    customName: op.customName,
+    displayName: op.customName ?? "New item",
+    categoryId: null,
+    qty: op.qty,
+    note: null,
+    addedBy: null,
+    addedAt: op.createdAt,
+    status: "pending",
+    clientId: op.id,
+  };
+}
+
+/** Merges the fetched (or cached) list with anything still sitting in the queue. */
+function toShopItems(entries: ListEntry[], queuedAdds: Extract<OutboxOp, { kind: "add" }>[]): ShopItem[] {
+  const known = new Set(entries.map((e) => e.clientId).filter(Boolean));
+  const extra = queuedAdds.filter((op) => !known.has(op.id)).map(pendingAddToEntry);
+  return [...entries, ...extra].map((e) => ({ ...e, bought: false, skipped: false, priceTotal: null }));
 }
 
 export function ShopModeScreen({
@@ -26,16 +71,33 @@ export function ShopModeScreen({
   const [pendingQty, setPendingQty] = useState("");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
-  const [buying, setBuying] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+  const { online, queue, queueBuy, queueSkip, hasQueuedResolution } = useOutbox();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Read once when the list loads rather than tracked as a dependency: the
+  // queue changes on every tick, and re-running the fetch on each one would
+  // fight the optimistic state this screen is holding.
+  const queuedAddsRef = useRef(queue);
+  queuedAddsRef.current = queue;
 
   // Fetch list and request wake lock
   useEffect(() => {
+    const queuedAdds = queuedAddsRef.current.filter(
+      (op): op is Extract<OutboxOp, { kind: "add" }> => op.kind === "add",
+    );
     const load = async () => {
       try {
         const entries = await api.getList();
-        setItems(entries.map((e) => ({ ...e, bought: false, priceTotal: null })));
+        writeSnapshot("list", entries);
+        setItems(toShopItems(entries, queuedAdds));
+      } catch (err) {
+        // The list is the one thing this screen cannot do without, and this is
+        // the screen most likely to be opened with no signal. Fall back to
+        // whatever the last successful fetch saw rather than showing 0/0.
+        if (!isOffline(err)) throw err;
+        const cached = readSnapshot<ListEntry[]>("list");
+        setItems(toShopItems(cached?.value ?? [], queuedAdds));
       } finally {
         setLoading(false);
       }
@@ -66,6 +128,11 @@ export function ShopModeScreen({
    * nothing -- correct, but it means anything added as free text never feeds
    * the restock engine or the spend history. This closes that gap at the one
    * moment the intent is obvious: just after buying it.
+   *
+   * This one still needs the network. It creates a pantry item and backfills a
+   * purchase against it, which is two dependent writes rather than a single
+   * replayable operation, so it is offered only when there is a connection to
+   * do it over -- the buy itself is already safely queued either way.
    */
   const handleTrack = useCallback(
     async (item: ShopItem) => {
@@ -91,41 +158,59 @@ export function ShopModeScreen({
     [toast],
   );
 
-  const boughtCount = items.filter((i) => i.bought).length;
+  const resolvedCount = items.filter(isResolved).length;
   const totalItems = items.length;
   const runningTotal = items.reduce((sum, i) => sum + (i.priceTotal ?? 0), 0);
-  const progress = totalItems > 0 ? (boughtCount / totalItems) * 100 : 0;
-  const allDone = totalItems > 0 && boughtCount === totalItems;
+  const progress = totalItems > 0 ? (resolvedCount / totalItems) * 100 : 0;
+  // Counts skips too: the trip is over when every line has been decided, not
+  // when every line has been bought.
+  const allDone = totalItems > 0 && resolvedCount === totalItems;
 
+  /**
+   * Marks an item bought.
+   *
+   * The tick lands immediately and the request is queued behind it, rather than
+   * the other way round. Shopping is a sequence of taps in a place with bad
+   * signal: waiting on a round-trip per item made the screen unusable exactly
+   * where it was needed, and a failed request used to lose the tap entirely.
+   *
+   * Double-tapping is safe at both ends -- the queue ignores an entry it has
+   * already resolved, and the server's buy endpoint no-ops on a repeat.
+   */
   const handleBuy = useCallback(
-    async (item: ShopItem, price: number | null = null, qtyRaw = "") => {
-      if (buying.has(item.id)) return;
-      setBuying((prev) => new Set(prev).add(item.id));
+    (item: ShopItem, price: number | null = null, qtyRaw = "") => {
+      if (isResolved(item) || hasQueuedResolution(item.id)) return;
       setPriceInputId(null);
 
-      try {
-        // Blank falls back to whatever quantity was put on the list, and only
-        // then to one -- so confirming without typing changes nothing.
-        await api.buyListEntry(item.id, {
-          priceTotal: price,
-          qty: parseQty(qtyRaw, item.qty ?? 1),
-        });
-        setItems((prev) =>
-          prev.map((i) =>
-            i.id === item.id ? { ...i, bought: true, priceTotal: price } : i,
-          ),
-        );
-      } catch {
-        toast("Failed to mark as bought", "error");
-      } finally {
-        setBuying((prev) => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
-      }
+      // Blank falls back to whatever quantity was put on the list, and only
+      // then to one -- so confirming without typing changes nothing.
+      queueBuy(item.id, parseQty(qtyRaw, item.qty ?? 1), price);
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, bought: true, priceTotal: price } : i)),
+      );
     },
-    [buying, toast],
+    [queueBuy, hasQueuedResolution],
+  );
+
+  /**
+   * Puts an item back without buying it.
+   *
+   * This button used to call handleBuy with no price, so "Skip" silently
+   * recorded a purchase: it stamped last_purchased_at, fed the median that sets
+   * the restock interval, and counted toward the item's history. Skipping now
+   * resolves the entry and writes no purchase at all, which is what the
+   * /list/:id/skip endpoint has always done.
+   */
+  const handleSkip = useCallback(
+    (item: ShopItem) => {
+      if (isResolved(item) || hasQueuedResolution(item.id)) return;
+      setPriceInputId(null);
+      queueSkip(item.id);
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, skipped: true, priceTotal: null } : i)),
+      );
+    },
+    [queueSkip, hasQueuedResolution],
   );
 
   const handleExit = useCallback(() => {
@@ -168,21 +253,21 @@ export function ShopModeScreen({
 <Icon name="chevron" className="w-4 h-4 rotate-180" strokeWidth={2} />
             Back
           </button>
-          <h1 className="font-display text-lg font-semibold text-text">Shop Mode</h1>
+          <h1 className="font-display text-xl font-bold tracking-tight text-text">Shop Mode</h1>
           <div className="text-right">
             {runningTotal > 0 && (
-              <div className="numeral text-base font-semibold text-accent-600">
+              <div className="numeral text-xl font-bold text-accent-text">
                 {formatMoney(runningTotal)}
               </div>
             )}
-            <div className="text-xs text-text-tertiary">
-              {boughtCount}/{totalItems}
+            <div className="numeral text-sm font-semibold text-text-secondary">
+              {resolvedCount}/{totalItems}
             </div>
           </div>
         </div>
 
         {/* Progress bar */}
-        <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
+        <div className="w-full h-2.5 bg-border rounded-full overflow-hidden">
           <div
             className="h-full rounded-full bg-accent-500 transition-all duration-500"
             style={{ width: `${progress}%` }}
@@ -205,7 +290,7 @@ export function ShopModeScreen({
                 <div key={item.id}>
                   <button
                     onClick={() => {
-                      if (item.bought) return;
+                      if (isResolved(item)) return;
                       // Show price input on tap
                       if (priceInputId === item.id) {
                         handleBuy(item, pendingPrice, pendingQty);
@@ -215,44 +300,51 @@ export function ShopModeScreen({
                         setPendingQty("");
                       }
                     }}
-                    disabled={item.bought || buying.has(item.id)}
+                    disabled={isResolved(item)}
                     className={`w-full text-left p-4 rounded-2xl border transition-all ${
                       item.bought
                         ? "bg-status-ok-bg border-status-ok/30 opacity-70"
-                        : "bg-surface-raised border-border-subtle shadow-sm hover:shadow-md active:scale-[0.99]"
+                        : item.skipped
+                          ? "bg-surface-sunken border-border opacity-60"
+                          : "bg-surface-raised border-border-subtle shadow-sm hover:shadow-md active:scale-[0.99]"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       {/* Checkbox circle */}
                       <div
-                        className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                        className={`w-9 h-9 rounded-full border-[2.5px] flex items-center justify-center shrink-0 transition-all ${
                           item.bought
                             ? "bg-status-ok border-status-ok text-white animate-check"
-                            : "border-border"
+                            : item.skipped
+                              ? "border-border text-text-tertiary"
+                              : "border-border"
                         }`}
                       >
                         {item.bought && (
-                          <Icon name="check" className="w-4 h-4" strokeWidth={3} />
+                          <Icon name="check" className="w-5 h-5" strokeWidth={3.5} />
+                        )}
+                        {item.skipped && (
+                          <Icon name="close" className="w-4 h-4" strokeWidth={3} />
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <span
-                          className={`text-base font-medium ${
-                            item.bought ? "line-through text-text-tertiary" : "text-text"
+                          className={`text-lg font-semibold tracking-tight ${
+                            isResolved(item) ? "line-through text-text-tertiary" : "text-text"
                           }`}
                         >
                           {item.displayName}
                         </span>
                         {item.qty && (
-                          <span className="text-sm text-text-tertiary ml-2">×{item.qty}</span>
+                          <span className="numeral text-base text-text-secondary ml-2">×{item.qty}</span>
                         )}
                       </div>
 
-                      {item.bought && item.itemId === null && !tracked.has(item.id) && (
+                      {online && item.bought && item.itemId === null && !tracked.has(item.id) && (
                         <button
                           onClick={() => handleTrack(item)}
-                          className="shrink-0 px-2.5 py-1 rounded-full bg-accent-50 text-accent-700 text-xs font-medium hover:bg-accent-100 transition-colors"
+                          className="shrink-0 px-2.5 py-1 rounded-full bg-accent-50 text-accent-text text-xs font-medium hover:bg-accent-100 transition-colors"
                         >
                           Track it
                         </button>
@@ -262,23 +354,35 @@ export function ShopModeScreen({
                         <span className="shrink-0 text-xs text-status-ok font-medium">Tracked</span>
                       )}
 
-                      {item.priceTotal !== null && (
-                        <span className="text-sm font-medium text-text-secondary">
-                          ৳{(item.priceTotal / 100).toFixed(0)}
+                      {item.skipped && (
+                        <span className="shrink-0 text-xs font-semibold text-text-tertiary">
+                          Skipped
                         </span>
                       )}
 
-                      {buying.has(item.id) && (
-                        <div className="w-5 h-5 rounded-full border-2 border-accent-300 border-t-accent-600 shrink-0" style={{ animation: "spin 0.7s linear infinite" }} />
+                      {item.priceTotal !== null && (
+                        <span className="numeral text-base font-semibold text-text">
+                          {formatMoney(item.priceTotal)}
+                        </span>
+                      )}
+
+                      {/* Ticked, but still sitting in the queue. Says the tap
+                          was recorded without pretending the server has it. */}
+                      {isResolved(item) && hasQueuedResolution(item.id) && (
+                        <Icon
+                          name="cloud-off"
+                          className="w-4 h-4 text-text-tertiary shrink-0"
+                          strokeWidth={1.75}
+                        />
                       )}
                     </div>
                   </button>
 
                   {/* Price input (shown when tapped) */}
-                  {priceInputId === item.id && !item.bought && (
+                  {priceInputId === item.id && !isResolved(item) && (
                     <div className="mt-1.5 space-y-2 animate-fade-in">
                       {/* Two rows, not four controls across. Price, quantity,
-                          Done and Skip on one line overflowed the card on a
+                          Bought and Skip on one line overflowed the card on a
                           phone and pushed the buttons off the edge. */}
                       <div className="flex items-center gap-2">
                         <div className="flex-1 min-w-0">
@@ -300,16 +404,13 @@ export function ShopModeScreen({
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleBuy(item, pendingPrice, pendingQty)}
-                          className="flex-1 py-2.5 rounded-lg bg-accent-500 text-text-on-accent text-sm font-semibold active:scale-[0.98] transition-transform"
+                          className="flex-1 py-3 rounded-lg bg-accent-500 text-text-on-accent text-sm font-bold active:scale-[0.98] transition-transform"
                         >
-                          Done
+                          Bought
                         </button>
                         <button
-                          onClick={() => {
-                            setPriceInputId(null);
-                            handleBuy(item, null, "");
-                          }}
-                          className="px-4 py-2.5 rounded-lg bg-surface-raised border border-border text-sm text-text-secondary hover:text-text transition-colors shrink-0"
+                          onClick={() => handleSkip(item)}
+                          className="px-4 py-3 rounded-lg bg-surface-raised border border-border text-sm font-semibold text-text-secondary hover:text-text transition-colors shrink-0"
                         >
                           Skip
                         </button>

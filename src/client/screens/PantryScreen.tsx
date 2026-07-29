@@ -7,6 +7,7 @@ import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
 import { ItemDetailSheet } from "../components/ItemDetailSheet";
 import { AddItemSheet } from "../components/AddItemSheet";
+import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
 
 export function PantryScreen({ categories }: { categories: Category[] }) {
   const [items, setItems] = useState<ItemWithStatus[]>([]);
@@ -19,7 +20,14 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
 
   const fetchItems = useCallback(async () => {
     try {
-      setItems(await api.getItems());
+      const fetched = await api.getItems();
+      writeSnapshot("items", fetched);
+      setItems(fetched);
+    } catch (err) {
+      // Read-only offline. Editing an item, or adding one, still needs the
+      // network -- those sheets say so themselves when their save fails.
+      if (!isOffline(err)) throw err;
+      setItems(readSnapshot<ItemWithStatus[]>("items")?.value ?? []);
     } finally {
       setLoading(false);
     }
@@ -46,7 +54,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
     <div className="safe-top">
       <header className="px-5 pt-6 pb-2">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-[1.75rem] font-semibold text-text">Pantry</h1>
+          <h1 className="screen-title">Pantry</h1>
           <span className="text-sm text-text-secondary">{items.length} items</span>
         </div>
       </header>
