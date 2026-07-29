@@ -63,6 +63,13 @@ export interface ListEntry {
   addedBy: string | null;
   addedAt: number;
   status: ListStatus;
+  /**
+   * The id the adding client generated, when it had one. Set only for entries
+   * that went through the offline queue; it is what lets a retried add find the
+   * row a lost response already created, and what lets the client match a
+   * queued add to the entry it became.
+   */
+  clientId: string | null;
 }
 
 export interface Purchase {

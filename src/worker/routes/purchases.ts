@@ -37,6 +37,33 @@ function isValidPriceTotal(value: unknown): value is number | null | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
+/** How far back a client is allowed to backdate a purchase. */
+const BACKDATE_WINDOW_SECONDS = 30 * 86400;
+
+/** purchased_at is epoch seconds: must be absent, or a positive integer. */
+function isValidPurchasedAt(value: unknown): value is number | undefined {
+  if (value === undefined) return true;
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * The moment a purchase actually happened.
+ *
+ * Shopping happens in shops, and shops are where phones lose signal, so a buy
+ * can be queued offline and sync hours or days later. Stamping it with the
+ * server clock at sync time would tell the restock engine the shop happened
+ * when the wifi came back -- dragging every learned interval and due date along
+ * with it, silently and unrecoverably.
+ *
+ * The value is client-supplied and so untrusted, but a phone with a skewed
+ * clock still has to be able to sync. So it is clamped rather than rejected:
+ * never in the future, never further back than the backdate window.
+ */
+function resolvePurchasedAt(value: number | undefined, now: number): number {
+  if (value === undefined) return now;
+  return Math.min(now, Math.max(now - BACKDATE_WINDOW_SECONDS, value));
+}
+
 purchases.post("/list/:id/bought", requireMember, async (c) => {
   const session = c.get("session");
   const id = c.req.param("id");
@@ -51,15 +78,27 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
     return c.json({ error: "not_found", message: "No such list entry." }, 404);
   }
 
-  const body = await c.req.json<{ qty?: number; priceTotal?: number | null; note?: string | null }>();
+  const body = await c.req.json<{
+    qty?: number;
+    priceTotal?: number | null;
+    note?: string | null;
+    purchasedAt?: number;
+  }>();
   if (!isValidPriceTotal(body.priceTotal)) {
     return c.json(
       { error: "invalid_price", message: "priceTotal must be a non-negative whole number of minor units." },
       400,
     );
   }
+  if (!isValidPurchasedAt(body.purchasedAt)) {
+    return c.json(
+      { error: "invalid_purchased_at", message: "purchasedAt must be a whole number of seconds since 1970." },
+      400,
+    );
+  }
 
   const now = nowSeconds();
+  const purchasedAt = resolvePurchasedAt(body.purchasedAt, now);
   const statements: D1PreparedStatement[] = [];
   let purchaseId: string | null = null;
 
@@ -82,7 +121,7 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO item (id, household_id, name, created_by, created_at, last_purchased_at)
          VALUES (?,?,?,?,?,?)`,
-      ).bind(newItemId, session.householdId, entry.custom_name, session.memberId, now, now).run();
+      ).bind(newItemId, session.householdId, entry.custom_name, session.memberId, now, purchasedAt).run();
       itemIdForPurchase = newItemId;
     } catch (err) {
       const existing = await c.env.DB.prepare(
@@ -118,7 +157,7 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
           purchaseId,
           session.householdId,
           itemIdForPurchase,
-          now,
+          purchasedAt,
           qty,
           item.unit,
           body.priceTotal ?? null,
@@ -127,10 +166,14 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
           id,
           session.householdId,
         ),
+        // MAX rather than a plain set: a backdated buy syncing late must not
+        // wind the restock clock backwards past a more recent purchase. SQLite's
+        // two-argument max() returns NULL if either side is, hence the COALESCE
+        // for an item that has never been bought.
         c.env.DB.prepare(
-          `UPDATE item SET last_purchased_at = ?
+          `UPDATE item SET last_purchased_at = MAX(COALESCE(last_purchased_at, 0), ?)
             WHERE id = ? AND household_id = ? AND ${stillPending}`,
-        ).bind(now, itemIdForPurchase, session.householdId, id, session.householdId),
+        ).bind(purchasedAt, itemIdForPurchase, session.householdId, id, session.householdId),
       );
     }
   }
@@ -174,6 +217,7 @@ purchases.post("/purchases", requireMember, async (c) => {
     unit?: string;
     priceTotal?: number | null;
     note?: string | null;
+    purchasedAt?: number;
   }>();
 
   if (!body.itemId) {
@@ -182,6 +226,12 @@ purchases.post("/purchases", requireMember, async (c) => {
   if (!isValidPriceTotal(body.priceTotal)) {
     return c.json(
       { error: "invalid_price", message: "priceTotal must be a non-negative whole number of minor units." },
+      400,
+    );
+  }
+  if (!isValidPurchasedAt(body.purchasedAt)) {
+    return c.json(
+      { error: "invalid_purchased_at", message: "purchasedAt must be a whole number of seconds since 1970." },
       400,
     );
   }
@@ -197,6 +247,7 @@ purchases.post("/purchases", requireMember, async (c) => {
   }
 
   const now = nowSeconds();
+  const purchasedAt = resolvePurchasedAt(body.purchasedAt, now);
   const id = crypto.randomUUID();
   const qty = body.qty ?? item.default_qty;
   const unit = body.unit?.trim() || item.unit;
@@ -205,12 +256,11 @@ purchases.post("/purchases", requireMember, async (c) => {
     c.env.DB.prepare(
       `INSERT INTO purchase (id, household_id, item_id, purchased_at, qty, unit, price_total, bought_by, note)
        VALUES (?,?,?,?,?,?,?,?,?)`,
-    ).bind(id, session.householdId, body.itemId, now, qty, unit, body.priceTotal ?? null, session.memberId, body.note ?? null),
-    c.env.DB.prepare("UPDATE item SET last_purchased_at = ? WHERE id = ? AND household_id = ?").bind(
-      now,
-      body.itemId,
-      session.householdId,
-    ),
+    ).bind(id, session.householdId, body.itemId, purchasedAt, qty, unit, body.priceTotal ?? null, session.memberId, body.note ?? null),
+    // MAX for the same reason as in /list/:id/bought above.
+    c.env.DB.prepare(
+      "UPDATE item SET last_purchased_at = MAX(COALESCE(last_purchased_at, 0), ?) WHERE id = ? AND household_id = ?",
+    ).bind(purchasedAt, body.itemId, session.householdId),
   ]);
 
   // Runs after the batch above, same reasoning as in POST /list/:id/bought.

@@ -17,6 +17,7 @@ interface ListEntryRow {
   added_by: string | null;
   added_at: number;
   status: "pending" | "bought" | "skipped";
+  client_id: string | null;
 }
 
 function toListEntry(row: ListEntryRow): ListEntry {
@@ -31,17 +32,21 @@ function toListEntry(row: ListEntryRow): ListEntry {
     addedBy: row.added_by,
     addedAt: row.added_at,
     status: row.status,
+    clientId: row.client_id,
   };
 }
+
+/** The column list every entry read shares, so they all map cleanly through toListEntry. */
+const ENTRY_COLUMNS = `le.id, le.item_id, le.custom_name,
+            COALESCE(i.name, le.custom_name) AS display_name,
+            i.category_id AS category_id,
+            le.qty, le.note, le.added_by, le.added_at, le.status, le.client_id`;
 
 /** Pending entries in aisle order: category sort_order, then when they were added. */
 list.get("/list", requireSession, async (c) => {
   const session = c.get("session");
   const rows = await c.env.DB.prepare(
-    `SELECT le.id, le.item_id, le.custom_name,
-            COALESCE(i.name, le.custom_name) AS display_name,
-            i.category_id AS category_id,
-            le.qty, le.note, le.added_by, le.added_at, le.status
+    `SELECT ${ENTRY_COLUMNS}
        FROM list_entry le
        LEFT JOIN item i ON i.id = le.item_id
        LEFT JOIN category c ON c.id = i.category_id
@@ -57,15 +62,25 @@ list.get("/list", requireSession, async (c) => {
 async function fetchListEntry(db: D1Database, id: string, householdId: string) {
   return db
     .prepare(
-      `SELECT le.id, le.item_id, le.custom_name,
-              COALESCE(i.name, le.custom_name) AS display_name,
-              i.category_id AS category_id,
-              le.qty, le.note, le.added_by, le.added_at, le.status
+      `SELECT ${ENTRY_COLUMNS}
          FROM list_entry le
          LEFT JOIN item i ON i.id = le.item_id
         WHERE le.id = ? AND le.household_id = ?`,
     )
     .bind(id, householdId)
+    .first<ListEntryRow>();
+}
+
+/** The row a previous attempt at this same queued add already created, if any. */
+async function fetchListEntryByClientId(db: D1Database, clientId: string, householdId: string) {
+  return db
+    .prepare(
+      `SELECT ${ENTRY_COLUMNS}
+         FROM list_entry le
+         LEFT JOIN item i ON i.id = le.item_id
+        WHERE le.client_id = ? AND le.household_id = ?`,
+    )
+    .bind(clientId, householdId)
     .first<ListEntryRow>();
 }
 
@@ -76,7 +91,18 @@ list.post("/list", requireMember, async (c) => {
     customName?: string;
     qty?: number | null;
     note?: string | null;
+    clientId?: string;
   }>();
+
+  // A client-generated id makes this add replayable. An offline queue has to
+  // retry anything whose response it never saw, and without this a lost
+  // response would put "birthday candles" on the list twice -- free text has no
+  // unique name index to fall back on the way a known item does.
+  const clientId = body.clientId?.trim() || null;
+  if (clientId) {
+    const seen = await fetchListEntryByClientId(c.env.DB, clientId, session.householdId);
+    if (seen) return c.json(toListEntry(seen));
+  }
 
   const hasItemId = !!body.itemId;
   const hasCustomName = !!body.customName?.trim();
@@ -127,21 +153,32 @@ list.post("/list", requireMember, async (c) => {
   }
 
   const id = crypto.randomUUID();
-  await c.env.DB.prepare(
-    `INSERT INTO list_entry (id, household_id, item_id, custom_name, qty, note, added_by, added_at, status)
-     VALUES (?,?,?,?,?,?,?,?,'pending')`,
-  )
-    .bind(
-      id,
-      session.householdId,
-      itemId,
-      itemId ? null : body.customName!.trim(),
-      body.qty ?? null,
-      body.note ?? null,
-      session.memberId,
-      now,
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO list_entry (id, household_id, item_id, custom_name, qty, note, added_by, added_at, status, client_id)
+       VALUES (?,?,?,?,?,?,?,?,'pending',?)`,
     )
-    .run();
+      .bind(
+        id,
+        session.householdId,
+        itemId,
+        itemId ? null : body.customName!.trim(),
+        body.qty ?? null,
+        body.note ?? null,
+        session.memberId,
+        now,
+        clientId,
+      )
+      .run();
+  } catch (err) {
+    // Two retries of the same queued add can both miss the lookup above and
+    // race to insert; the unique index is what actually decides it. Whichever
+    // loses returns the row the winner wrote, same as if it had never raced.
+    if (!clientId) throw err;
+    const raced = await fetchListEntryByClientId(c.env.DB, clientId, session.householdId);
+    if (!raced) throw err;
+    return c.json(toListEntry(raced));
+  }
 
   const row = await fetchListEntry(c.env.DB, id, session.householdId);
   return c.json(toListEntry(row!), 201);
