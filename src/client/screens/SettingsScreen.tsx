@@ -121,14 +121,14 @@ export function SettingsScreen({
   return (
     <div className="safe-top">
       <header className="px-5 pt-6 pb-4">
-        <h1 className="font-display text-[1.75rem] font-semibold text-text">Settings</h1>
+        <h1 className="screen-title">Settings</h1>
         <p className="text-sm text-text-secondary mt-0.5">{householdName}</p>
       </header>
 
       <div className="px-4 space-y-4 pb-8">
         {/* Current profile */}
         <section className="card p-4">
-          <h3 className="eyebrow text-text-tertiary mb-3">
+          <h3 className="eyebrow mb-3">
             Profile
           </h3>
           <div className="flex items-center gap-3 mb-3">
@@ -202,7 +202,7 @@ export function SettingsScreen({
             so the section is absent rather than shown-and-disabled. */}
         {currentMember?.isAdmin && (
         <section className="card p-4">
-          <h3 className="eyebrow text-text-tertiary mb-3">Profile lock</h3>
+          <h3 className="eyebrow mb-3">Profile lock</h3>
 
           <p className="text-sm text-text-secondary">
             {hasLock
@@ -276,7 +276,7 @@ export function SettingsScreen({
 
         {/* Theme */}
         <section className="card p-4">
-          <h3 className="eyebrow text-text-tertiary mb-3">
+          <h3 className="eyebrow mb-3">
             Appearance
           </h3>
           <div className="flex gap-2">
@@ -298,7 +298,7 @@ export function SettingsScreen({
 
         {/* Notifications */}
         <section className="card p-4">
-          <h3 className="eyebrow text-text-tertiary mb-3">
+          <h3 className="eyebrow mb-3">
             Notifications
           </h3>
 
@@ -357,7 +357,7 @@ export function SettingsScreen({
 
         {/* Coming soon */}
         <section className="card p-4">
-          <h3 className="eyebrow text-text-tertiary mb-2">
+          <h3 className="eyebrow mb-2">
             More Settings
           </h3>
           <p className="text-sm text-text-tertiary">

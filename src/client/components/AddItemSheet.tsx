@@ -120,7 +120,7 @@ export function AddItemSheet({
                       if (match) setCategoryId(match.id);
                       setShowSuggestions(false);
                     }}
-                    className="px-2.5 py-1 rounded-full bg-accent-50 text-accent-700 text-xs font-medium hover:bg-accent-100 transition-colors"
+                    className="px-2.5 py-1 rounded-full bg-accent-50 text-accent-text text-xs font-medium hover:bg-accent-100 transition-colors"
                   >
                     {sg.name}
                   </button>

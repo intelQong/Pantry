@@ -30,7 +30,7 @@ export function BottomNav({
               aria-current={active ? "page" : undefined}
               className={`relative flex-1 flex flex-col items-center justify-center gap-1
                 transition-colors ${
-                  active ? "text-accent-600" : "text-text-tertiary hover:text-text-secondary"
+                  active ? "text-accent-text" : "text-text-tertiary hover:text-text-secondary"
                 }`}
             >
               {/* The active marker is a short rule at the top edge rather than a

@@ -323,7 +323,7 @@ export function ItemDetailSheet({
           {/* Purchase history */}
           {purchases.length > 0 && (
             <div>
-              <h4 className="eyebrow text-text-tertiary mb-2">
+              <h4 className="eyebrow mb-2">
                 Purchase History
               </h4>
               <div className="space-y-1">

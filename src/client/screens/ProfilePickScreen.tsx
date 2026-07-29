@@ -125,7 +125,7 @@ export function ProfilePickScreen({
     <div className="min-h-dvh flex items-center justify-center px-6 bg-surface">
       <div className="w-full max-w-[19rem] animate-fade-in">
         <div className="text-center mb-8">
-          <h1 className="font-display text-[1.75rem] font-semibold text-text">Who's shopping?</h1>
+          <h1 className="screen-title">Who's shopping?</h1>
           <p className="text-sm text-text-secondary mt-1.5">
             So the list knows who added what
           </p>
