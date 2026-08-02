@@ -186,6 +186,8 @@ export const buyListEntry = (id: string, data?: { qty?: number; priceTotal?: num
 
 export const addPurchase = (data: {
   itemId: string;
+  /** Epoch seconds. The server clamps it: never future, never >30 days back. */
+  purchasedAt?: number;
   qty?: number;
   unit?: string;
   priceTotal?: number | null;
