@@ -38,6 +38,16 @@ export interface Item {
   intervalLocked: boolean;
   lastPurchasedAt: number | null;
   archived: boolean;
+  /**
+   * True for anything in the Utilities category -- gas, electricity, wifi.
+   *
+   * They are ordinary items so they can ride the purchase loop, the restock
+   * learner and the push digest, but they are not groceries: they must not
+   * appear on Today, in the pantry browse, or in the shop list's quick-add.
+   * The server decides this once so no screen has to re-derive it from
+   * category names.
+   */
+  isUtility: boolean;
 }
 
 /** An item with its live restock state, as computed by the restock engine. */

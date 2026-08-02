@@ -20,7 +20,10 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
 
   const fetchItems = useCallback(async () => {
     try {
-      const fetched = await api.getItems();
+      // Gas, electricity and wifi are items so they can ride the purchase loop,
+      // but the pantry is a grocery browse -- they belong on Bills. Filtered
+      // before the snapshot so the offline copy agrees with the live one.
+      const fetched = (await api.getItems()).filter((i) => !i.isUtility);
       writeSnapshot("items", fetched);
       setItems(fetched);
     } catch (err) {

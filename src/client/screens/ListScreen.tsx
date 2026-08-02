@@ -31,7 +31,12 @@ export function ListScreen({
 
   const fetchAll = useCallback(async () => {
     try {
-      const [listData, itemsData] = await Promise.all([api.getList(), api.getItems()]);
+      const [listData, allItems] = await Promise.all([api.getList(), api.getItems()]);
+      // Utilities are not bought at the shop, so they stay out of quick-add.
+      // Filtered here too, not just in Pantry: both screens write the same
+      // "items" snapshot, and an unfiltered write would put gas and wifi back
+      // into the other screen's offline copy.
+      const itemsData = allItems.filter((i) => !i.isUtility);
       writeSnapshot("list", listData);
       writeSnapshot("items", itemsData);
       setEntries(listData);

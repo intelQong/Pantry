@@ -31,7 +31,7 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   const fetchAll = useCallback(async () => {
     try {
       const allItems = await api.getItems();
-      const utilities = allItems.filter((i) => category && i.categoryId === category.id);
+      const utilities = allItems.filter((i) => i.isUtility);
       setItems(utilities);
 
       // Each card's history and the combined log below both need the full

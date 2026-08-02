@@ -62,3 +62,32 @@ describe("utilities seeding", () => {
     expect(wifi.intervalLocked).toBe(true);
   });
 });
+
+describe("utilities stay out of the grocery screens", () => {
+  it("flags them so no screen has to guess from category names", async () => {
+    const res = await get("/api/items", memberCookie);
+    const items = await res.json<Array<{ name: string; isUtility: boolean }>>();
+
+    expect(items.find((i) => i.name === "Wifi Bill")!.isUtility).toBe(true);
+    // Anything uncategorised must come back false, not null: the correlated
+    // subquery returns NULL when category_id is null, and a null here would
+    // sail through a `!i.isUtility` filter but fail an `=== false` check.
+    const created = await json(
+      "/api/items",
+      { name: "Loose Tea", categoryId: null },
+      memberCookie,
+    );
+    const tea = await created.json<{ isUtility: boolean }>();
+    expect(tea.isUtility).toBe(false);
+  });
+
+  it("keeps them off Today, which is the shop-trip screen", async () => {
+    const res = await get("/api/today", memberCookie);
+    const today = await res.json<Array<{ name: string }>>();
+    const names = today.map((i) => i.name);
+
+    expect(names).not.toContain("Wifi Bill");
+    expect(names).not.toContain("Gas Cylinder");
+    expect(names).not.toContain("Electricity Recharge");
+  });
+});

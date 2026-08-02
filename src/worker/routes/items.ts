@@ -35,6 +35,8 @@ interface ItemRow {
   last_purchased_at: number | null;
   archived: number;
   created_at: number;
+  /** 1 when the item sits in the Utilities category; NULL when uncategorised. */
+  is_utility: number | null;
 }
 
 function toItem(row: ItemRow): Item {
@@ -52,6 +54,7 @@ function toItem(row: ItemRow): Item {
     intervalLocked: row.interval_locked === 1,
     lastPurchasedAt: row.last_purchased_at,
     archived: row.archived === 1,
+    isUtility: row.is_utility === 1,
   };
 }
 
@@ -60,9 +63,13 @@ function toItemWithStatus(row: ItemRow, leadDays: number, now: number, onList: b
   return { ...toItem(row), status, daysSince, daysUntilDue, onList };
 }
 
+// A correlated subquery rather than a join, so every query that selects these
+// columns keeps working with a bare `FROM item` -- including the single-row
+// fetches after a create or a patch.
 const ITEM_COLUMNS = `id, name, category_id, unit, default_qty, brand, notes, is_staple,
             default_price, restock_interval_days, interval_locked, last_purchased_at,
-            archived, created_at`;
+            archived, created_at,
+            (SELECT c.name = 'Utilities' FROM category c WHERE c.id = item.category_id) AS is_utility`;
 
 /** The item ids currently sitting on the household's pending shop list. */
 async function pendingItemIds(db: D1Database, householdId: string): Promise<Set<string>> {
@@ -122,7 +129,12 @@ items.get("/today", requireMember, async (c) => {
     pendingItemIds(c.env.DB, session.householdId),
   ]);
 
-  const withStatus = rows.results.map((row) => toItemWithStatus(row, leadDays, now, onList.has(row.id)));
+  // Utilities are staples by every mechanical measure -- they have an interval,
+  // they go due, they push -- but Today is the "what do I buy at the shop"
+  // screen, and nobody buys a wifi bill at the shop. They live on Bills.
+  const withStatus = rows.results
+    .filter((row) => row.is_utility !== 1)
+    .map((row) => toItemWithStatus(row, leadDays, now, onList.has(row.id)));
   withStatus.sort(byUrgency);
 
   return c.json(withStatus);
