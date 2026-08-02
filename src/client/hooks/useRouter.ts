@@ -5,6 +5,7 @@ export type Route =
   | { page: "list" }
   | { page: "shop" }
   | { page: "pantry" }
+  | { page: "utilities" }
   | { page: "insights" }
   | { page: "settings" }
   | { page: "item"; id: string };
@@ -18,8 +19,9 @@ function parseHash(hash: string): Route {
   switch (h) {
     case "list":     return { page: "list" };
     case "shop":     return { page: "shop" };
-    case "pantry":   return { page: "pantry" };
-    case "insights": return { page: "insights" };
+    case "pantry":    return { page: "pantry" };
+    case "utilities": return { page: "utilities" };
+    case "insights":  return { page: "insights" };
     case "settings": return { page: "settings" };
     default:         return { page: "today" };
   }

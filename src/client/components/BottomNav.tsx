@@ -5,7 +5,8 @@ const TABS: Array<{ id: string; label: string; icon: IconName }> = [
   { id: "today", label: "Today", icon: "sun" },
   { id: "list", label: "List", icon: "basket" },
   { id: "pantry", label: "Pantry", icon: "box" },
-  { id: "insights", label: "Insights", icon: "chart" },
+  { id: "utilities", label: "Bills", icon: "zap" },
+  { id: "insights", label: "Stats", icon: "chart" },
   { id: "settings", label: "Settings", icon: "sliders" },
 ];
 

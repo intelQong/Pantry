@@ -16,6 +16,7 @@ import { TodayScreen } from "./screens/TodayScreen";
 import { ListScreen } from "./screens/ListScreen";
 import { ShopModeScreen } from "./screens/ShopModeScreen";
 import { PantryScreen } from "./screens/PantryScreen";
+import { UtilitiesScreen } from "./screens/UtilitiesScreen";
 import { InsightsScreen } from "./screens/InsightsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 
@@ -144,6 +145,7 @@ export function App() {
           {route.page === "list" && <ListScreen categories={categories} navigate={navigate} />}
           {route.page === "shop" && <ShopModeScreen categories={categories} navigate={navigate} />}
           {route.page === "pantry" && <PantryScreen categories={categories} />}
+          {route.page === "utilities" && <UtilitiesScreen categories={categories} />}
           {route.page === "insights" && <InsightsScreen categories={categories} />}
           {route.page === "settings" && (
             <SettingsScreen

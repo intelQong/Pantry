@@ -33,6 +33,7 @@ const PATHS = {
   refresh: "M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5",
   // A cloud struck through, for "this is saved here, not there".
   "cloud-off": "M4 4l16 16M7.5 18.5h9a4 4 0 0 0 1.6-7.7A6 6 0 0 0 9.2 7.2M6.6 9.6a4.5 4.5 0 0 0 .9 8.9",
+  zap: "M13 2 4 14h6l-1 8 9-12h-6l1-8Z",
 } as const;
 
 export type IconName = keyof typeof PATHS;
