@@ -76,8 +76,12 @@ gets it on the screen for free.
 - `GET /api/items` — the item list, filtered client-side by category name.
 - `PATCH /api/items/:id` — edit interval/unit/name.
 
-Offline logging rides the existing outbox (`src/client/lib/outbox.ts`) unchanged,
-since it is the same `POST /purchases` call Shop Mode already queues.
+Utility logging is **online-only**. The outbox (`src/client/lib/outbox.ts`) queues
+three op kinds — `buy`, `skip`, `add` — all keyed to a list entry; a bare
+`POST /purchases` is not among them. Offline shopping exists because shops kill
+signal; bills are paid at home. A failed save shows an error and keeps the sheet
+open with the values intact, rather than silently dropping the entry. Backdating
+covers the "I forgot to log it on the day" case, which is the real one.
 
 ## Screen
 
@@ -126,9 +130,8 @@ a token that should have been a token.
   and the three seeded items, `POST /purchases` against a seeded item both writes the
   row and updates `last_purchased_at`, and a late wifi payment leaves
   `restock_interval_days` at 30 (interval lock holds).
-- Manual: `npm run dev`, log a backdated gas refill offline (devtools offline), confirm
-  it queues in the outbox, reconnect, confirm it syncs with the backdated timestamp
-  rather than the sync time.
+- Manual: `npm run dev`, log a backdated gas refill, confirm the card's "days since"
+  reflects the chosen date and not today.
 
 ## Out of scope
 
