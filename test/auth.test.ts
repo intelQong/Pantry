@@ -139,7 +139,7 @@ describe("auth flow", () => {
     const categories = await env.DB.prepare("SELECT COUNT(*) AS n FROM category").first<{
       n: number;
     }>();
-    expect(categories?.n).toBe(8);
+    expect(categories?.n).toBe(9);
     const settings = await env.DB.prepare("SELECT COUNT(*) AS n FROM member_settings").first<{
       n: number;
     }>();

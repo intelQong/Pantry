@@ -21,6 +21,19 @@ const DEFAULT_CATEGORIES: Array<[string, string]> = [
   ["Snacks & Drinks", "#ec4899"],
   ["Household & Cleaning", "#64748b"],
   ["Personal Care", "#14b8a6"],
+  ["Utilities", "#0ea5e9"],
+];
+
+/**
+ * Gas, electricity and wifi seeded into the Utilities category for every new
+ * household -- mirrors migrations/0008_utilities.sql, which backfills the
+ * same three items for households that already existed. Wifi is locked
+ * because it is a fixed 30-day billing cycle; gas and electricity learn.
+ */
+const UTILITY_ITEMS: Array<[name: string, unit: string, locked: boolean]> = [
+  ["Gas Cylinder", "cylinder", false],
+  ["Electricity Recharge", "recharge", false],
+  ["Wifi Bill", "month", true],
 ];
 
 const auth = new Hono<AppEnv>();
@@ -149,11 +162,37 @@ auth.post("/setup", async (c) => {
   }
 
   for (const [i, [name, color]] of DEFAULT_CATEGORIES.entries()) {
+    const categoryId = crypto.randomUUID();
     statements.push(
       c.env.DB.prepare(
         "INSERT INTO category (id, household_id, name, color, sort_order) VALUES (?,?,?,?,?)",
-      ).bind(crypto.randomUUID(), householdId, name, color, i),
+      ).bind(categoryId, householdId, name, color, i),
     );
+
+    if (name === "Utilities") {
+      for (const [itemName, unit, locked] of UTILITY_ITEMS) {
+        statements.push(
+          c.env.DB.prepare(
+            `INSERT INTO item (
+               id, household_id, name, category_id, unit, default_qty,
+               is_staple, restock_interval_days, interval_locked, archived, created_at
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          ).bind(
+            crypto.randomUUID(),
+            householdId,
+            itemName,
+            categoryId,
+            unit,
+            1,
+            1,
+            30,
+            locked ? 1 : 0,
+            0,
+            now,
+          ),
+        );
+      }
+    }
   }
 
   await c.env.DB.batch(statements);
