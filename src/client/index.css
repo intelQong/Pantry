@@ -231,12 +231,25 @@
 /* ------------------------------------------------------------------ */
 *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
 
+/* The app is read at arm's length in a kitchen, not at a desk. Everything in
+   here is expressed in rem, so the whole scale moves from this one number --
+   which is also why nothing below this line should hardcode a px font size. */
 html {
+  font-size: 17px;
   font-family: var(--font-family-sans);
   background: var(--color-surface);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* iOS HIG minimum touch target. Applied to the controls rather than to a
+   utility class so a new button cannot forget it. */
+button,
+[role="button"],
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  min-height: 2.75rem; /* 44px at the 16px browser default, 47px at ours */
 }
 
 body { margin: 0; min-height: 100dvh; overscroll-behavior: none; }

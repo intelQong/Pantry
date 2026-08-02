@@ -21,7 +21,7 @@ export function BottomNav({
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-border-subtle safe-bottom">
-      <div className="flex items-stretch justify-around max-w-lg mx-auto h-[3.75rem]">
+      <div className="flex items-stretch justify-around max-w-lg mx-auto h-[4.25rem]">
         {TABS.map((tab) => {
           const active = current === tab.id;
           return (
@@ -42,7 +42,7 @@ export function BottomNav({
                 }`}
               />
               <Icon name={tab.icon} className="w-[1.35rem] h-[1.35rem]" strokeWidth={active ? 2 : 1.6} />
-              <span className={`text-[0.625rem] ${active ? "font-semibold" : "font-medium"}`}>
+              <span className={`text-[0.6875rem] ${active ? "font-semibold" : "font-medium"}`}>
                 {tab.label}
               </span>
             </button>
