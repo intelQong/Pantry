@@ -5,6 +5,7 @@ import type {
   ItemWithStatus,
   ListEntry,
   Purchase,
+  PurchaseWithItem,
   ApiError,
   InsightsResponse,
 } from "@shared/types";
@@ -196,6 +197,9 @@ export const addPurchase = (data: {
 
 export const getItemPurchases = (itemId: string) =>
   request<Purchase[]>("GET", `/items/${itemId}/purchases`);
+
+/** Everything the household has bought, newest first. Utilities excluded. */
+export const getPurchases = () => request<PurchaseWithItem[]>("GET", "/purchases");
 
 /* ------------------------------------------------------------------ */
 /* Push                                                                */

@@ -94,6 +94,11 @@ export interface Purchase {
   note: string | null;
 }
 
+/** A purchase carrying what was bought, for the shopping history's flat list. */
+export interface PurchaseWithItem extends Purchase {
+  itemName: string;
+}
+
 export interface MemberSettings {
   /** ISO weekday numbers, 1=Mon..7=Sun. */
   notifyDays: number[];

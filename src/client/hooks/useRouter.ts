@@ -7,6 +7,7 @@ export type Route =
   | { page: "pantry" }
   | { page: "utilities" }
   | { page: "insights" }
+  | { page: "history" }
   | { page: "settings" }
   | { page: "item"; id: string };
 
@@ -22,6 +23,7 @@ function parseHash(hash: string): Route {
     case "pantry":    return { page: "pantry" };
     case "utilities": return { page: "utilities" };
     case "insights":  return { page: "insights" };
+    case "history":   return { page: "history" };
     case "settings": return { page: "settings" };
     default:         return { page: "today" };
   }

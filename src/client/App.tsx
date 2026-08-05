@@ -17,6 +17,7 @@ import { ListScreen } from "./screens/ListScreen";
 import { ShopModeScreen } from "./screens/ShopModeScreen";
 import { PantryScreen } from "./screens/PantryScreen";
 import { UtilitiesScreen } from "./screens/UtilitiesScreen";
+import { HistoryScreen } from "./screens/HistoryScreen";
 import { InsightsScreen } from "./screens/InsightsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 
@@ -146,7 +147,8 @@ export function App() {
           {route.page === "shop" && <ShopModeScreen categories={categories} navigate={navigate} />}
           {route.page === "pantry" && <PantryScreen categories={categories} />}
           {route.page === "utilities" && <UtilitiesScreen categories={categories} />}
-          {route.page === "insights" && <InsightsScreen categories={categories} />}
+          {route.page === "insights" && <InsightsScreen categories={categories} navigate={navigate} />}
+          {route.page === "history" && <HistoryScreen navigate={navigate} />}
           {route.page === "settings" && (
             <SettingsScreen
               currentMemberId={state.memberId}

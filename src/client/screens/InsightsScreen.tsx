@@ -9,7 +9,7 @@ import { isOffline } from "../lib/cache";
 
 type Cadence = "week" | "month";
 
-export function InsightsScreen({ categories }: { categories: Category[] }) {
+export function InsightsScreen({ categories, navigate }: { categories: Category[]; navigate: (path: string) => void }) {
   const [items, setItems] = useState<ItemWithStatus[] | null>(null);
   const [listItemIds, setListItemIds] = useState<Set<string>>(new Set());
   const [data, setData] = useState<InsightsResponse | null>(null);
@@ -128,6 +128,22 @@ export function InsightsScreen({ categories }: { categories: Category[] }) {
           {data.totalPurchases === 1 ? "purchase" : "purchases"} logged
         </p>
       </header>
+
+      <div className="px-4 pb-3">
+        <button
+          onClick={() => navigate("history")}
+          className="w-full flex items-center gap-3 px-4 py-3 card text-left hover:border-accent-400 transition-colors"
+        >
+          <Icon name="clock" className="w-5 h-5 text-text-tertiary shrink-0" strokeWidth={1.6} />
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-text">Shopping history</span>
+            <span className="block text-xs text-text-tertiary mt-0.5">
+              Every trip, by date
+            </span>
+          </span>
+          <Icon name="chevron" className="w-4 h-4 text-text-tertiary shrink-0" strokeWidth={2} />
+        </button>
+      </div>
 
       <div className="px-4 space-y-3">
         {/* Spend ---------------------------------------------------------- */}

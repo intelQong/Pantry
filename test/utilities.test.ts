@@ -91,3 +91,37 @@ describe("utilities stay out of the grocery screens", () => {
     expect(names).not.toContain("Electricity Recharge");
   });
 });
+
+describe("shopping history", () => {
+  it("lists purchases newest first, named, and without the utility bills", async () => {
+    const itemsRes = await get("/api/items", memberCookie);
+    const items = await itemsRes.json<Array<{ id: string; name: string }>>();
+    const gas = items.find((i) => i.name === "Gas Cylinder")!;
+
+    const rice = await (
+      await json("/api/items", { name: "Rice", unit: "kg" }, memberCookie)
+    ).json<{ id: string }>();
+
+    const day = 86400;
+    const now = Math.floor(Date.now() / 1000);
+    await json("/api/purchases", { itemId: rice.id, qty: 5, priceTotal: 25000, purchasedAt: now - 3 * day }, memberCookie);
+    await json("/api/purchases", { itemId: rice.id, qty: 5, priceTotal: 26000, purchasedAt: now - day }, memberCookie);
+    await json("/api/purchases", { itemId: gas.id, priceTotal: 150000 }, memberCookie);
+
+    const res = await get("/api/purchases", memberCookie);
+    expect(res.status).toBe(200);
+    const history = await res.json<Array<{ itemName: string; purchasedAt: number; priceTotal: number | null }>>();
+
+    // The gas refill is a bill, not a shop: it belongs to the Bills log only.
+    expect(history.map((p) => p.itemName)).not.toContain("Gas Cylinder");
+
+    const riceBuys = history.filter((p) => p.itemName === "Rice");
+    expect(riceBuys).toHaveLength(2);
+    expect(riceBuys[0]!.priceTotal).toBe(26000); // newest first
+    expect(riceBuys[0]!.purchasedAt).toBeGreaterThan(riceBuys[1]!.purchasedAt);
+  });
+
+  it("requires a session", async () => {
+    expect((await get("/api/purchases")).status).toBe(401);
+  });
+});

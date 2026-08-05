@@ -19,6 +19,61 @@ export function epochSecondsToDateInput(seconds: number): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
+export interface PurchaseDay<T> {
+  /** 'YYYY-MM-DD', used as the React key and for sorting. */
+  key: string;
+  /** Human heading: 'Today', 'Yesterday', or e.g. 'Sat, 2 Aug'. */
+  label: string;
+  /** Sum of priceTotal in minor units; unpriced entries contribute nothing. */
+  total: number;
+  purchases: T[];
+}
+
+/**
+ * Buckets purchases into the days they happened on, newest day first.
+ *
+ * `todayKey` is a parameter rather than read from the clock so the labelling
+ * can be tested without pretending it is a particular Tuesday.
+ */
+export function groupByDay<T extends { purchasedAt: number; priceTotal: number | null }>(
+  purchases: T[],
+  todayKey: string = epochSecondsToDateInput(Date.now() / 1000),
+): PurchaseDay<T>[] {
+  // ponytail: naive -86400 for "yesterday". Correct everywhere without DST,
+  // which includes where this app is used; a DST changeover would cost the
+  // word "Yesterday" for one day a year, nothing more.
+  const yesterdayKey = epochSecondsToDateInput(dateInputToEpochSeconds(todayKey) - 86400);
+
+  const days = new Map<string, T[]>();
+  for (const p of purchases) {
+    const key = epochSecondsToDateInput(p.purchasedAt);
+    const bucket = days.get(key);
+    if (bucket) bucket.push(p);
+    else days.set(key, [p]);
+  }
+
+  return [...days.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, list]) => ({
+      key,
+      label:
+        key === todayKey
+          ? "Today"
+          : key === yesterdayKey
+            ? "Yesterday"
+            : new Date(dateInputToEpochSeconds(key) * 1000).toLocaleDateString(undefined, {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                // A bare 'Sat, 2 Aug' is ambiguous once the history spans a new
+                // year, so older years say which one.
+                ...(key.slice(0, 4) === todayKey.slice(0, 4) ? {} : { year: "numeric" }),
+              }),
+      total: list.reduce((sum, p) => sum + (p.priceTotal ?? 0), 0),
+      purchases: [...list].sort((a, b) => b.purchasedAt - a.purchasedAt),
+    }));
+}
+
 export interface PurchaseMonth {
   /** 'YYYY-MM', used as the React key and for sorting. */
   key: string;

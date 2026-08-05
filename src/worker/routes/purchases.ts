@@ -276,6 +276,35 @@ purchases.post("/purchases", requireMember, async (c) => {
   return c.json(toPurchase(row!), 201);
 });
 
+/**
+ * The whole household's buying history, newest first, for the History screen.
+ *
+ * Utilities are excluded on the same grounds they are excluded from Today and
+ * Pantry: gas and wifi are paid, not shopped for, and the Bills screen already
+ * has their log. The cap is generous enough to cover a couple of years of
+ * weekly shopping and exists only so this can never become an unbounded read.
+ */
+purchases.get("/purchases", requireSession, async (c) => {
+  const session = c.get("session");
+
+  const rows = await c.env.DB.prepare(
+    `SELECT p.id, p.item_id, p.purchased_at, p.qty, p.unit, p.price_total, p.bought_by, p.note,
+            i.name AS item_name
+       FROM purchase p
+       JOIN item i ON i.id = p.item_id
+       LEFT JOIN category cat ON cat.id = i.category_id
+      WHERE p.household_id = ? AND COALESCE(cat.name, '') != 'Utilities'
+      ORDER BY p.purchased_at DESC, p.rowid DESC
+      LIMIT 500`,
+  )
+    .bind(session.householdId)
+    .all<PurchaseRow & { item_name: string }>();
+
+  return c.json(
+    rows.results.map((row) => ({ ...toPurchase(row), itemName: row.item_name })),
+  );
+});
+
 purchases.get("/items/:id/purchases", requireSession, async (c) => {
   const session = c.get("session");
   const itemId = c.req.param("id");
