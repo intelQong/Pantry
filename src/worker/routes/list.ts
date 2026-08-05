@@ -84,6 +84,48 @@ async function fetchListEntryByClientId(db: D1Database, clientId: string, househ
     .first<ListEntryRow>();
 }
 
+interface MergeTarget {
+  id: string;
+  qty: number | null;
+  note: string | null;
+}
+
+/**
+ * The pending row this add belongs to, if the list already has one.
+ *
+ * Known items match on item_id, which idx_list_unique_pending_item keeps
+ * unique. Free text matches on the *displayed* name, case-insensitively:
+ * "rice" and "Rice" are the same shop trip, and matching a known item's name
+ * too means typing out something already on the list merges into it rather
+ * than sitting beside it as an untracked twin.
+ */
+async function findPendingDuplicate(
+  db: D1Database,
+  householdId: string,
+  itemId: string | null,
+  customName: string | null,
+): Promise<MergeTarget | null> {
+  if (itemId) {
+    return db
+      .prepare(
+        "SELECT id, qty, note FROM list_entry WHERE household_id = ? AND item_id = ? AND status = 'pending'",
+      )
+      .bind(householdId, itemId)
+      .first<MergeTarget>();
+  }
+
+  return db
+    .prepare(
+      `SELECT le.id, le.qty, le.note
+         FROM list_entry le
+         LEFT JOIN item i ON i.id = le.item_id
+        WHERE le.household_id = ? AND le.status = 'pending'
+          AND LOWER(COALESCE(i.name, le.custom_name)) = LOWER(?)`,
+    )
+    .bind(householdId, customName)
+    .first<MergeTarget>();
+}
+
 list.post("/list", requireMember, async (c) => {
   const session = c.get("session");
   const body = await c.req.json<{
@@ -130,39 +172,36 @@ list.post("/list", requireMember, async (c) => {
 
   const now = nowSeconds();
 
-  // Nothing goes on the pending list twice. Known items are unique by index
-  // (idx_list_unique_pending_item); free text has no index to lean on, so it is
-  // matched on the displayed name, case-insensitively -- "rice" and "Rice" are
-  // the same shop trip, and it matches a known item's name too so typing what
-  // is already there by hand merges rather than duplicates. Either way the add
-  // bumps the existing row's qty/note instead of erroring or duplicating.
-  const existing = itemId
-    ? await c.env.DB.prepare(
-        "SELECT id, qty, note FROM list_entry WHERE household_id = ? AND item_id = ? AND status = 'pending'",
-      )
-        .bind(session.householdId, itemId)
-        .first<{ id: string; qty: number | null; note: string | null }>()
-    : await c.env.DB.prepare(
-        `SELECT le.id, le.qty, le.note
-           FROM list_entry le
-           LEFT JOIN item i ON i.id = le.item_id
-          WHERE le.household_id = ? AND le.status = 'pending'
-            AND LOWER(COALESCE(i.name, le.custom_name)) = LOWER(?)`,
-      )
-        .bind(session.householdId, body.customName!.trim())
-        .first<{ id: string; qty: number | null; note: string | null }>();
+  const customName = itemId ? null : body.customName!.trim();
 
-  if (existing) {
+  /**
+   * Folds this add into the row that is already there.
+   *
+   * An add with no quantity of its own means "one more of these", so it adds
+   * one rather than leaving the count alone -- otherwise the second phone's add
+   * would vanish without trace. A blank qty counts as one, matching what an
+   * empty quantity box means on the list itself. Replays cannot inflate this:
+   * a retried add is caught by its clientId long before it reaches here.
+   */
+  const mergeInto = async (target: MergeTarget) => {
     await c.env.DB.prepare("UPDATE list_entry SET qty = ?, note = ? WHERE id = ?")
       .bind(
-        body.qty !== undefined ? body.qty : existing.qty,
-        body.note !== undefined ? body.note : existing.note,
-        existing.id,
+        body.qty !== undefined ? body.qty : (target.qty ?? 1) + 1,
+        body.note !== undefined ? body.note : target.note,
+        target.id,
       )
       .run();
-    const row = await fetchListEntry(c.env.DB, existing.id, session.householdId);
+    const row = await fetchListEntry(c.env.DB, target.id, session.householdId);
     return c.json(toListEntry(row!));
-  }
+  };
+
+  const existing = await findPendingDuplicate(
+    c.env.DB,
+    session.householdId,
+    itemId,
+    customName,
+  );
+  if (existing) return mergeInto(existing);
 
   const id = crypto.randomUUID();
   try {
@@ -174,7 +213,7 @@ list.post("/list", requireMember, async (c) => {
         id,
         session.householdId,
         itemId,
-        itemId ? null : body.customName!.trim(),
+        customName,
         body.qty ?? null,
         body.note ?? null,
         session.memberId,
@@ -183,13 +222,25 @@ list.post("/list", requireMember, async (c) => {
       )
       .run();
   } catch (err) {
-    // Two retries of the same queued add can both miss the lookup above and
-    // race to insert; the unique index is what actually decides it. Whichever
-    // loses returns the row the winner wrote, same as if it had never raced.
-    if (!clientId) throw err;
-    const raced = await fetchListEntryByClientId(c.env.DB, clientId, session.householdId);
-    if (!raced) throw err;
-    return c.json(toListEntry(raced));
+    // The lookup above is check-then-act, so two adds arriving together can
+    // both miss it and race to insert. A unique index is what actually decides
+    // that race -- idx_list_client_id for a retry of one queued add,
+    // idx_list_unique_pending_item and idx_list_unique_pending_name for two
+    // separate adds of the same thing. Whichever loses folds into the winner's
+    // row, which is the same answer it would have got without the race.
+    const raced = clientId
+      ? await fetchListEntryByClientId(c.env.DB, clientId, session.householdId)
+      : null;
+    if (raced) return c.json(toListEntry(raced));
+
+    const winner = await findPendingDuplicate(
+      c.env.DB,
+      session.householdId,
+      itemId,
+      customName,
+    );
+    if (!winner) throw err;
+    return mergeInto(winner);
   }
 
   const row = await fetchListEntry(c.env.DB, id, session.householdId);

@@ -345,3 +345,53 @@ describe("buying is idempotent", () => {
     expect(count?.n).toBe(0);
   });
 });
+
+describe("duplicates cannot reach the list", () => {
+  it("bumps the count when the other phone adds something already there", async () => {
+    const first = await json("/api/list", { customName: "Paper Towels" }, memberCookie);
+    expect(first.status).toBe(201);
+    expect((await first.json<{ qty: number | null }>()).qty).toBeNull();
+
+    // No qty of its own: a bare add means "one more of these". A blank counts
+    // as one, so the first merge reads as 2.
+    const second = await json("/api/list", { customName: "paper towels" }, memberCookie);
+    expect(second.status).toBe(200);
+    expect((await second.json<{ qty: number }>()).qty).toBe(2);
+
+    const third = await json("/api/list", { customName: "PAPER TOWELS" }, memberCookie);
+    expect((await third.json<{ qty: number }>()).qty).toBe(3);
+  });
+
+  it("does not bump when a retry of the same queued add replays", async () => {
+    const clientId = "replay-me-once";
+    const a = await json("/api/list", { customName: "Foil", clientId }, memberCookie);
+    const b = await json("/api/list", { customName: "Foil", clientId }, memberCookie);
+
+    expect((await a.json<{ id: string; qty: number | null }>()).qty).toBeNull();
+    expect((await b.json<{ id: string; qty: number | null }>()).qty).toBeNull();
+  });
+
+  it("refuses a duplicate pending name at the database, not just in the route", async () => {
+    // The route merges before it ever inserts, so this goes straight at the
+    // table: the index is the guarantee that survives a caller who forgets.
+    const household = await env.DB.prepare(
+      "SELECT household_id FROM list_entry WHERE custom_name = 'Foil'",
+    ).first<{ household_id: string }>();
+
+    const insert = (name: string) =>
+      env.DB.prepare(
+        `INSERT INTO list_entry (id, household_id, item_id, custom_name, added_by, added_at, status)
+         VALUES (?,?,NULL,?,NULL,?,'pending')`,
+      )
+        .bind(crypto.randomUUID(), household!.household_id, name, 1)
+        .run();
+
+    await expect(insert("foil")).rejects.toThrow();
+    await expect(insert("FOIL")).rejects.toThrow();
+
+    // Same name is fine once the first one is no longer pending -- next week's
+    // shop must be able to put foil back on the list.
+    await env.DB.prepare("UPDATE list_entry SET status = 'bought' WHERE custom_name = 'Foil'").run();
+    await expect(insert("Foil")).resolves.toBeDefined();
+  });
+});
