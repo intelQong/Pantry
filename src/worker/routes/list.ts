@@ -130,26 +130,38 @@ list.post("/list", requireMember, async (c) => {
 
   const now = nowSeconds();
 
-  // Known items are unique on the pending list (idx_list_unique_pending_item):
-  // re-adding one that's already pending bumps its qty/note instead of erroring.
-  if (itemId) {
-    const existing = await c.env.DB.prepare(
-      "SELECT id, qty, note FROM list_entry WHERE household_id = ? AND item_id = ? AND status = 'pending'",
-    )
-      .bind(session.householdId, itemId)
-      .first<{ id: string; qty: number | null; note: string | null }>();
+  // Nothing goes on the pending list twice. Known items are unique by index
+  // (idx_list_unique_pending_item); free text has no index to lean on, so it is
+  // matched on the displayed name, case-insensitively -- "rice" and "Rice" are
+  // the same shop trip, and it matches a known item's name too so typing what
+  // is already there by hand merges rather than duplicates. Either way the add
+  // bumps the existing row's qty/note instead of erroring or duplicating.
+  const existing = itemId
+    ? await c.env.DB.prepare(
+        "SELECT id, qty, note FROM list_entry WHERE household_id = ? AND item_id = ? AND status = 'pending'",
+      )
+        .bind(session.householdId, itemId)
+        .first<{ id: string; qty: number | null; note: string | null }>()
+    : await c.env.DB.prepare(
+        `SELECT le.id, le.qty, le.note
+           FROM list_entry le
+           LEFT JOIN item i ON i.id = le.item_id
+          WHERE le.household_id = ? AND le.status = 'pending'
+            AND LOWER(COALESCE(i.name, le.custom_name)) = LOWER(?)`,
+      )
+        .bind(session.householdId, body.customName!.trim())
+        .first<{ id: string; qty: number | null; note: string | null }>();
 
-    if (existing) {
-      await c.env.DB.prepare("UPDATE list_entry SET qty = ?, note = ? WHERE id = ?")
-        .bind(
-          body.qty !== undefined ? body.qty : existing.qty,
-          body.note !== undefined ? body.note : existing.note,
-          existing.id,
-        )
-        .run();
-      const row = await fetchListEntry(c.env.DB, existing.id, session.householdId);
-      return c.json(toListEntry(row!));
-    }
+  if (existing) {
+    await c.env.DB.prepare("UPDATE list_entry SET qty = ?, note = ? WHERE id = ?")
+      .bind(
+        body.qty !== undefined ? body.qty : existing.qty,
+        body.note !== undefined ? body.note : existing.note,
+        existing.id,
+      )
+      .run();
+    const row = await fetchListEntry(c.env.DB, existing.id, session.householdId);
+    return c.json(toListEntry(row!));
   }
 
   const id = crypto.randomUUID();

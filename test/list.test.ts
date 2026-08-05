@@ -81,6 +81,25 @@ describe("shop list", () => {
     expect(entry).toMatchObject({ itemId: null, customName: "Birthday candles", displayName: "Birthday candles" });
   });
 
+  it("merges a re-add of the same name regardless of case, instead of duplicating", async () => {
+    const again = await json("/api/list", { customName: "birthday CANDLES", qty: 3 }, memberCookie);
+    expect(again.status).toBe(200); // 200, not 201: nothing new was created
+    expect(await again.json<{ qty: number }>()).toMatchObject({
+      displayName: "Birthday candles",
+      qty: 3,
+    });
+
+    const list = await get("/api/list", memberCookie);
+    const rows = await list.json<Array<{ displayName: string }>>();
+    expect(rows.filter((e) => e.displayName.toLowerCase() === "birthday candles")).toHaveLength(1);
+  });
+
+  it("merges free text typed over an item already on the list", async () => {
+    const dup = await json("/api/list", { customName: "mILK" }, memberCookie);
+    expect(dup.status).toBe(200);
+    expect((await dup.json<{ itemId: string | null }>()).itemId).toBe(itemId);
+  });
+
   it("PATCHes qty/note on an entry", async () => {
     const list = await get("/api/list", memberCookie);
     const candles = (await list.json<Array<{ id: string; customName: string | null }>>()).find(

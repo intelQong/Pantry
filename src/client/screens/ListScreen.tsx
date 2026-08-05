@@ -150,18 +150,56 @@ export function ListScreen({
     [],
   );
 
+  /**
+   * Absorbs an add for something already on the list, and says so.
+   *
+   * Names are compared case-insensitively, because "rice" and "Rice" are the
+   * same shop trip. Returns true when it handled the add, so the caller queues
+   * nothing. The server merges the same way for the other phone's adds; this is
+   * what makes it visible to whoever tapped.
+   */
+  const absorbDuplicate = useCallback(
+    (name: string, itemId?: string) => {
+      const key = name.trim().toLowerCase();
+      const existing = allEntries.find(
+        (e) =>
+          (itemId != null && e.itemId === itemId) ||
+          e.displayName.trim().toLowerCase() === key,
+      );
+      if (!existing) return false;
+
+      // An unsent row has no server id to PATCH -- same limit as handleSaveQty.
+      if (isPending(existing.id)) {
+        toast(`${existing.displayName} is already on the list`, "info");
+        return true;
+      }
+
+      // A blank qty means "one of these", so the first bump reads as ×2.
+      const qty = (existing.qty ?? 1) + 1;
+      setEntries((prev) => prev.map((e) => (e.id === existing.id ? { ...e, qty } : e)));
+      toast(`${existing.displayName} is already on the list — now ×${qty}`, "info");
+      api.updateListEntry(existing.id, { qty }).catch((err) => {
+        toast(isOffline(err) ? "Quantities need a connection" : "Couldn't save the quantity", "error");
+        fetchAll();
+      });
+      return true;
+    },
+    [allEntries, isPending, toast, fetchAll],
+  );
+
   const handleAddItem = useCallback(
     (itemId: string) => {
       setShowSuggestions(false);
       setQuery("");
       const item = items.find((i) => i.id === itemId);
+      if (absorbDuplicate(item?.name ?? "", itemId)) return;
       const op = queueAdd({ itemId });
       if (op.kind === "add") {
         showOptimistically(op, item?.name ?? "New item", item?.categoryId ?? null);
       }
       toast("Added to list");
     },
-    [items, queueAdd, showOptimistically, toast],
+    [items, queueAdd, showOptimistically, toast, absorbDuplicate],
   );
 
   const handleAddCustom = useCallback(
@@ -171,11 +209,12 @@ export function ListScreen({
 
       setShowSuggestions(false);
       setQuery("");
+      if (absorbDuplicate(name)) return;
       const op = queueAdd({ customName: name });
       if (op.kind === "add") showOptimistically(op, name, null);
       toast(`${name} added to list`);
     },
-    [query, queueAdd, showOptimistically, toast],
+    [query, queueAdd, showOptimistically, toast, absorbDuplicate],
   );
 
   /** Commits the quantity typed on a row. Blank clears it back to unspecified. */

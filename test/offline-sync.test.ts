@@ -199,19 +199,19 @@ describe("replayable adds", () => {
     expect(count?.n).toBe(1);
   });
 
-  it("still duplicates free text added twice without a clientId", async () => {
-    // Not a bug: two people genuinely adding the same free text should get two
-    // rows. Only a *retry of one queued add* is deduped, which is what the
-    // client id identifies.
+  it("merges free text added twice without a clientId, ignoring case", async () => {
+    // Two people adding the same thing want one row with a bigger number on it,
+    // not two rows. The clientId dedupe still matters on top of this: it also
+    // covers a retry that would otherwise *bump* the qty a second time.
     await json("/api/list", { customName: "Paper towels" }, memberCookie);
-    await json("/api/list", { customName: "Paper towels" }, memberCookie);
+    await json("/api/list", { customName: "paper TOWELS" }, memberCookie);
 
     const count = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM list_entry WHERE custom_name = ?",
+      "SELECT COUNT(*) AS n FROM list_entry WHERE LOWER(custom_name) = ?",
     )
-      .bind("Paper towels")
+      .bind("paper towels")
       .first<{ n: number }>();
-    expect(count?.n).toBe(2);
+    expect(count?.n).toBe(1);
   });
 
   it("matches a retry even after the entry was already bought", async () => {
