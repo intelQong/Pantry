@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatMoney, parseMoney, toInputValue } from "../src/client/lib/money";
+import { formatMoney, parseMoney, toInputValue, allocateTotal } from "../src/client/lib/money";
 
 /**
  * Every amount in the app is an integer count of poisha. These are the only
@@ -81,5 +81,56 @@ describe("toInputValue", () => {
     for (const minor of [0, 1, 5, 500, 1235, 34000, 120000]) {
       expect(parseMoney(toInputValue(minor))).toBe(minor);
     }
+  });
+});
+
+describe("allocateTotal", () => {
+  const ids = ["rice", "milk", "onions", "chicken"];
+
+  it("divides evenly when nothing is remembered", () => {
+    expect(allocateTotal(120000, ids, {})).toEqual({
+      rice: 30000, milk: 30000, onions: 30000, chicken: 30000,
+    });
+  });
+
+  it("holds a remembered price and re-divides the rest", () => {
+    const out = allocateTotal(120000, ids, { rice: 50000 });
+    expect(out.rice).toBe(50000);
+    // 70000 across three: 23333 each, the last taking the odd poisha.
+    expect(out.milk).toBe(23333);
+    expect(out.onions).toBe(23333);
+    expect(out.chicken).toBe(23334);
+  });
+
+  it("adds back up to the total exactly, whatever does not divide evenly", () => {
+    // Only claimed while the pins still leave something to divide -- once they
+    // exceed the bill there is no total left to reconstruct.
+    for (const total of [100000, 100001, 99999, 3001, 7]) {
+      const cases: Record<string, number>[] = [{}, { rice: 5 }, { rice: 5, milk: 2 }];
+      for (const pins of cases) {
+        const out = allocateTotal(total, ids, pins);
+        const sum = ids.reduce((n, id) => n + out[id]!, 0);
+        expect(sum).toBe(total);
+      }
+    }
+  });
+
+  it("leaves nothing to divide when the remembered prices already cover it", () => {
+    // Not negative prices: the caller sums the pins to see the overshoot.
+    const out = allocateTotal(50000, ids, { rice: 50000 });
+    expect(out).toEqual({ rice: 50000, milk: 0, onions: 0, chicken: 0 });
+
+    const over = allocateTotal(10000, ids, { rice: 50000 });
+    expect(over.milk).toBe(0);
+    expect(over.chicken).toBe(0);
+  });
+
+  it("returns the pins untouched when every price is remembered", () => {
+    const pins = { rice: 100, milk: 200, onions: 300, chicken: 400 };
+    expect(allocateTotal(999999, ids, pins)).toEqual(pins);
+  });
+
+  it("gives a single unpinned item the whole remainder", () => {
+    expect(allocateTotal(1000, ["a"], {})).toEqual({ a: 1000 });
   });
 });

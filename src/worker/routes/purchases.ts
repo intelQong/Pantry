@@ -277,6 +277,79 @@ purchases.post("/purchases", requireMember, async (c) => {
 });
 
 /**
+ * Corrects what was recorded for purchases already logged: quantities and
+ * prices, nothing else.
+ *
+ * Takes a list rather than one id because splitting a receipt total across a
+ * day rewrites every price on that day at once. D1 runs a batch as a single
+ * transaction, so the whole day lands or none of it does -- a half-applied
+ * split would leave the money spread across a shop that never happened.
+ *
+ * purchased_at is deliberately not editable here. It is the only field the
+ * restock engine reads (src/worker/restock.ts), so leaving it alone means this
+ * endpoint can never disturb a learned interval or a due date.
+ */
+purchases.patch("/purchases", requireMember, async (c) => {
+  const session = c.get("session");
+  const body = await c.req.json<{
+    updates?: Array<{ id?: string; qty?: number; priceTotal?: number | null }>;
+  }>();
+
+  const updates = body.updates;
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return c.json({ error: "no_updates", message: "Send at least one update." }, 400);
+  }
+
+  const statements: D1PreparedStatement[] = [];
+  for (const update of updates) {
+    if (!update.id) {
+      return c.json({ error: "missing_id", message: "Every update needs an id." }, 400);
+    }
+    if (!isValidPriceTotal(update.priceTotal)) {
+      return c.json(
+        { error: "invalid_price", message: "priceTotal must be a non-negative whole number of minor units." },
+        400,
+      );
+    }
+    if (
+      update.qty !== undefined &&
+      (typeof update.qty !== "number" || !Number.isFinite(update.qty) || update.qty <= 0)
+    ) {
+      return c.json({ error: "invalid_qty", message: "qty must be a positive number." }, 400);
+    }
+
+    const sets: string[] = [];
+    const values: unknown[] = [];
+    if (update.qty !== undefined) {
+      sets.push("qty = ?");
+      values.push(update.qty);
+    }
+    if (update.priceTotal !== undefined) {
+      sets.push("price_total = ?");
+      values.push(update.priceTotal);
+    }
+    if (sets.length === 0) continue;
+
+    // Scoped to the household on the statement itself, so a guessed id from
+    // another kitchen updates nothing rather than relying on a prior check.
+    values.push(update.id, session.householdId);
+    statements.push(
+      c.env.DB.prepare(
+        `UPDATE purchase SET ${sets.join(", ")} WHERE id = ? AND household_id = ?`,
+      ).bind(...values),
+    );
+  }
+
+  if (statements.length === 0) {
+    return c.json({ error: "no_updates", message: "Nothing to change." }, 400);
+  }
+
+  const results = await c.env.DB.batch(statements);
+  const changed = results.reduce((sum, r) => sum + (r.meta.changes ?? 0), 0);
+  return c.json({ ok: true, updated: changed });
+});
+
+/**
  * The whole household's buying history, newest first, for the History screen.
  *
  * Utilities are excluded on the same grounds they are excluded from Today and

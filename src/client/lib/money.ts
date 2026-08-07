@@ -33,6 +33,58 @@ export function parseMoney(input: string): number | null {
   return Math.round(major * 100);
 }
 
+/**
+ * Spreads a bill total across the things it paid for.
+ *
+ * The problem it solves: you get home with a receipt for ৳1200 and four items,
+ * and you remember what the rice cost but not the rest. Prices you do remember
+ * are *pinned* — they are taken as given, and only what is left over is divided
+ * between the ones you don't. Pin another and the rest re-divides, so the guess
+ * gets narrower every time you remember something.
+ *
+ * Everything is in minor units and stays integral: the shares are floored and
+ * the last unpinned item absorbs the leftover poisha, so the parts always add
+ * back up to exactly the total. Splitting evenly and rounding each share would
+ * quietly invent or destroy a few poisha on most receipts.
+ *
+ * Pins totalling more than the bill leave nothing to divide. Rather than
+ * inventing negative prices, every unpinned item gets zero — the caller can see
+ * the overshoot for itself by summing the pins, and should say so.
+ */
+export function allocateTotal(
+  total: number,
+  ids: string[],
+  pinned: Record<string, number>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  const free: string[] = [];
+  let pinnedSum = 0;
+
+  for (const id of ids) {
+    const pin = pinned[id];
+    if (pin === undefined) free.push(id);
+    else {
+      out[id] = pin;
+      pinnedSum += pin;
+    }
+  }
+
+  if (free.length === 0) return out;
+
+  const remaining = total - pinnedSum;
+  if (remaining <= 0) {
+    for (const id of free) out[id] = 0;
+    return out;
+  }
+
+  const share = Math.floor(remaining / free.length);
+  for (const id of free) out[id] = share;
+  // The last one takes the remainder, so the parts sum to the total exactly.
+  out[free[free.length - 1]!] = remaining - share * (free.length - 1);
+
+  return out;
+}
+
 /** 1235 -> "12.35" for prefilling an input, without the symbol. */
 export function toInputValue(minorUnits: number | null | undefined): string {
   if (minorUnits === null || minorUnits === undefined) return "";

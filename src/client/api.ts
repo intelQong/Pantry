@@ -201,6 +201,16 @@ export const getItemPurchases = (itemId: string) =>
 /** Everything the household has bought, newest first. Utilities excluded. */
 export const getPurchases = () => request<PurchaseWithItem[]>("GET", "/purchases");
 
+/**
+ * Corrects quantities and prices on purchases already logged.
+ *
+ * Batched because splitting a receipt total rewrites a whole day at once, and
+ * the server applies the batch as one transaction.
+ */
+export const updatePurchases = (
+  updates: Array<{ id: string; qty?: number; priceTotal?: number | null }>,
+) => request<{ ok: true; updated: number }>("PATCH", "/purchases", { updates });
+
 /* ------------------------------------------------------------------ */
 /* Push                                                                */
 /* ------------------------------------------------------------------ */

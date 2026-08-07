@@ -125,3 +125,86 @@ describe("shopping history", () => {
     expect((await get("/api/purchases")).status).toBe(401);
   });
 });
+
+describe("correcting a logged shop", () => {
+  it("edits quantity and price together, and leaves the shop date alone", async () => {
+    const items = await (await get("/api/items", memberCookie)).json<Array<{ id: string; name: string }>>();
+    const rice = items.find((i) => i.name === "Rice")!;
+
+    const before = await (
+      await get("/api/purchases", memberCookie)
+    ).json<Array<{ id: string; itemName: string; purchasedAt: number }>>();
+    const target = before.find((p) => p.itemName === "Rice")!;
+
+    const res = await json(
+      "/api/purchases",
+      { updates: [{ id: target.id, qty: 9, priceTotal: 12345 }] },
+      memberCookie,
+      "PATCH",
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json<{ updated: number }>()).toMatchObject({ updated: 1 });
+
+    const after = await (
+      await get(`/api/items/${rice.id}/purchases`, memberCookie)
+    ).json<Array<{ id: string; qty: number; priceTotal: number; purchasedAt: number }>>();
+    const edited = after.find((p) => p.id === target.id)!;
+    expect(edited.qty).toBe(9);
+    expect(edited.priceTotal).toBe(12345);
+    // The one field the restock engine reads must be untouched by an edit.
+    expect(edited.purchasedAt).toBe(target.purchasedAt);
+  });
+
+  it("applies a whole split at once", async () => {
+    // Seeds its own shop rather than reusing whatever earlier tests logged, so
+    // the batch really is three statements.
+    const trip: string[] = [];
+    for (const name of ["Split Lentils", "Split Sugar", "Split Oil"]) {
+      const item = await (await json("/api/items", { name }, memberCookie)).json<{ id: string }>();
+      const buy = await json("/api/purchases", { itemId: item.id }, memberCookie);
+      trip.push((await buy.json<{ id: string }>()).id);
+    }
+
+    const res = await json(
+      "/api/purchases",
+      { updates: trip.map((id, i) => ({ id, priceTotal: 40000 + i })) },
+      memberCookie,
+      "PATCH",
+    );
+    expect((await res.json<{ updated: number }>()).updated).toBe(3);
+
+    const after = await (await get("/api/purchases", memberCookie)).json<Array<{ id: string; priceTotal: number }>>();
+    for (const [i, id] of trip.entries()) {
+      expect(after.find((r) => r.id === id)!.priceTotal).toBe(40000 + i);
+    }
+  });
+
+  it("rejects a nonsense edit rather than writing part of it", async () => {
+    const all = await (await get("/api/purchases", memberCookie)).json<Array<{ id: string; priceTotal: number | null }>>();
+    const first = all[0]!;
+
+    const bad = await json(
+      "/api/purchases",
+      { updates: [{ id: first.id, priceTotal: 999 }, { id: all[1]!.id, qty: -3 }] },
+      memberCookie,
+      "PATCH",
+    );
+    expect(bad.status).toBe(400);
+
+    // The valid half of a rejected batch must not have landed.
+    const after = await (await get("/api/purchases", memberCookie)).json<Array<{ id: string; priceTotal: number | null }>>();
+    expect(after.find((p) => p.id === first.id)!.priceTotal).toBe(first.priceTotal);
+  });
+
+  it("will not touch another household's purchases", async () => {
+    const all = await (await get("/api/purchases", memberCookie)).json<Array<{ id: string }>>();
+    const res = await json(
+      "/api/purchases",
+      { updates: [{ id: "some-other-kitchens-id", priceTotal: 100 }] },
+      memberCookie,
+      "PATCH",
+    );
+    expect((await res.json<{ updated: number }>()).updated).toBe(0);
+    expect(all.length).toBeGreaterThan(0);
+  });
+});

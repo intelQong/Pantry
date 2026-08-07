@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import type { PurchaseWithItem } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
+import { PurchaseDaySheet } from "../components/PurchaseDaySheet";
 import { formatMoney } from "../lib/money";
 import { isOffline } from "../lib/cache";
 import { groupByDay } from "../lib/utilities";
@@ -18,8 +19,9 @@ import { groupByDay } from "../lib/utilities";
 export function HistoryScreen({ navigate }: { navigate: (path: string) => void }) {
   const [purchases, setPurchases] = useState<PurchaseWithItem[] | null>(null);
   const [unreachable, setUnreachable] = useState(false);
+  const [editingDay, setEditingDay] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api
       .getPurchases()
       .then(setPurchases)
@@ -31,6 +33,10 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
         setUnreachable(true);
       });
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const days = useMemo(() => groupByDay(purchases ?? []), [purchases]);
   const total = useMemo(
@@ -75,11 +81,15 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
           <section key={day.key} className="card p-4">
             <div className="flex items-baseline justify-between gap-3 mb-2.5">
               <h2 className="text-sm font-semibold text-text">{day.label}</h2>
-              <span className="text-sm font-medium text-text-secondary tabular-nums">
-                {/* An unpriced trip would read as a free one, so say nothing
-                    rather than a confident ৳0. */}
-                {day.total > 0 ? formatMoney(day.total) : ""}
-              </span>
+              <button
+                onClick={() => setEditingDay(day.key)}
+                className="flex items-baseline gap-1.5 text-sm font-medium text-accent-text tabular-nums"
+              >
+                {/* An unpriced trip would read as a free one, so the prompt
+                    replaces the figure rather than sitting next to a ৳0. */}
+                {day.total > 0 ? formatMoney(day.total) : "Add prices"}
+                <Icon name="chevron" className="w-3.5 h-3.5 self-center" strokeWidth={2} />
+              </button>
             </div>
 
             <ul className="divide-y divide-border-subtle">
@@ -91,22 +101,41 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
                   >
                     {p.itemName}
                   </button>
-                  <span className="text-xs text-text-tertiary shrink-0 tabular-nums">
-                    {p.qty} {p.unit}
-                  </span>
-                  <span className="text-sm text-text shrink-0 tabular-nums w-16 text-right">
-                    {p.priceTotal !== null ? (
-                      formatMoney(p.priceTotal)
-                    ) : (
-                      <span className="text-text-tertiary">—</span>
-                    )}
-                  </span>
+                  {/* Tapping the figures edits the shop; tapping the name goes
+                      to the item. Two targets, because from a row of numbers
+                      the thing you want is usually to correct them. */}
+                  <button
+                    onClick={() => setEditingDay(day.key)}
+                    aria-label={`Edit ${p.itemName} on ${day.label}`}
+                    className="flex items-center gap-3 shrink-0"
+                  >
+                    <span className="text-xs text-text-tertiary tabular-nums">
+                      {p.qty} {p.unit}
+                    </span>
+                    <span className="text-sm text-text tabular-nums w-16 text-right">
+                      {p.priceTotal !== null ? (
+                        formatMoney(p.priceTotal)
+                      ) : (
+                        <span className="text-text-tertiary">—</span>
+                      )}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
           </section>
         ))}
       </div>
+
+      {editingDay !== null && (
+        <PurchaseDaySheet
+          label={days.find((d) => d.key === editingDay)?.label ?? "This shop"}
+          purchases={days.find((d) => d.key === editingDay)?.purchases ?? []}
+          open
+          onClose={() => setEditingDay(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   );
 }
