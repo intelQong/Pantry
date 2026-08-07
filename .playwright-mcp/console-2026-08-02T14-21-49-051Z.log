@@ -1,2 +1,0 @@
-[    6521ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://pantry.intelqong.workers.dev/:0
-[    7037ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ https://pantry.intelqong.workers.dev/:0

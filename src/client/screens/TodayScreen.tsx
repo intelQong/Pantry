@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { ItemWithStatus, Category, RestockStatus } from "@shared/types";
+import type { ItemWithStatus, Category } from "@shared/types";
 import * as api from "../api";
 import { Icon, type IconName } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { StatusStrip } from "../components/StatusStrip";
 import { useToast } from "../components/Toast";
 import { useOutbox } from "../components/Outbox";
 import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
@@ -20,13 +21,6 @@ const GROUPS: Record<UrgencyGroup, { label: string; icon: IconName; tone: string
   due:      { label: "Due now",   icon: "clock", tone: "text-status-due",      bar: "bg-status-due" },
   due_soon: { label: "Coming up", icon: "spark", tone: "text-status-due-soon", bar: "bg-status-due-soon" },
 };
-
-const TALLY: Array<{ status: RestockStatus; label: string; bar: string; dot: string }> = [
-  { status: "overdue",  label: "overdue", bar: "bg-status-overdue",  dot: "bg-status-overdue" },
-  { status: "due",      label: "due",     bar: "bg-status-due",      dot: "bg-status-due" },
-  { status: "due_soon", label: "soon",    bar: "bg-status-due-soon", dot: "bg-status-due-soon" },
-  { status: "ok",       label: "stocked", bar: "bg-status-ok",       dot: "bg-status-ok" },
-];
 
 export function TodayScreen({
   categories,
@@ -103,7 +97,6 @@ export function TodayScreen({
 
   if (loading) return <LoadingSpinner />;
 
-  const counts = TALLY.map((t) => items.filter((i) => i.status === t.status).length);
   const total = items.length;
   const urgent = items.filter((i) => i.status !== "ok");
 
@@ -154,33 +147,8 @@ export function TodayScreen({
               and Pantry starts watching them.
             </p>
           ) : (
-            <>
-              {/* Proportional strip: one glance tells you how the pantry sits. */}
-              <div className="flex gap-1 h-2 mb-3" role="img" aria-label={
-                TALLY.map((t, i) => `${counts[i]} ${t.label}`).join(", ")
-              }>
-                {TALLY.map((t, i) =>
-                  counts[i]! > 0 ? (
-                    <div
-                      key={t.status}
-                      className={`${t.bar} rounded-full`}
-                      style={{ flexGrow: counts[i] }}
-                    />
-                  ) : null,
-                )}
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {TALLY.map((t, i) =>
-                  counts[i]! > 0 ? (
-                    <span key={t.status} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                      <span className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />
-                      <span className="numeral font-medium text-text">{counts[i]}</span>
-                      {t.label}
-                    </span>
-                  ) : null,
-                )}
-              </div>
-            </>
+            /* One glance tells you how the pantry sits. Shared with Pantry. */
+            <StatusStrip items={items} />
           )}
         </section>
 
