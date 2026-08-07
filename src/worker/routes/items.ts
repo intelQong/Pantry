@@ -260,7 +260,32 @@ items.patch("/items/:id", requireSession, async (c) => {
     );
   }
 
-  if (body.categoryId) {
+  // POST validates both of these; PATCH used to write them straight through.
+  // A zero or negative interval makes computeStatus report the item overdue on
+  // every read forever, and a null default_qty hits a NOT NULL constraint as an
+  // unhandled 500.
+  if (
+    body.defaultQty !== undefined &&
+    (typeof body.defaultQty !== "number" || !Number.isFinite(body.defaultQty) || body.defaultQty <= 0)
+  ) {
+    return c.json({ error: "invalid_qty", message: "Default quantity must be a positive number." }, 400);
+  }
+  if (
+    body.restockIntervalDays !== undefined &&
+    (!Number.isInteger(body.restockIntervalDays) ||
+      body.restockIntervalDays < 1 ||
+      body.restockIntervalDays > 365)
+  ) {
+    return c.json(
+      { error: "invalid_interval", message: "Restock interval must be a whole number of days from 1 to 365." },
+      400,
+    );
+  }
+
+  // Checked on the same condition the write below uses. Guarding on truthiness
+  // while writing on !== undefined let "" through unvalidated, straight into a
+  // dangling category reference.
+  if (body.categoryId !== undefined && body.categoryId !== null) {
     const category = await c.env.DB.prepare(
       "SELECT id FROM category WHERE id = ? AND household_id = ?",
     )

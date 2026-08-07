@@ -79,15 +79,19 @@ export function PurchaseDaySheet({
       const updates = purchases.map((p) => {
         const qtyText = qtys[p.id];
         const price = allocated[p.id];
+        // Emptying a field that had a price is a deliberate "I don't know
+        // what this cost", so it clears the record rather than being ignored.
+        // A row that was blank and stayed blank sends nothing, so opening this
+        // sheet and closing it still cannot wipe anything.
+        const cleared =
+          prices[p.id] !== undefined && prices[p.id]!.trim() === "" && p.priceTotal !== null;
+
         return {
           id: p.id,
           ...(qtyText !== undefined && qtyText.trim() !== ""
             ? { qty: parseQty(qtyText, p.qty) }
             : {}),
-          // Only send a price when there is one to send. Leaving every blank
-          // row untouched means opening this sheet and closing it cannot wipe
-          // prices that were already recorded.
-          ...(price !== undefined ? { priceTotal: price } : {}),
+          ...(cleared ? { priceTotal: null } : price !== undefined ? { priceTotal: price } : {}),
         };
       });
 
@@ -100,7 +104,7 @@ export function PurchaseDaySheet({
     } finally {
       setSaving(false);
     }
-  }, [purchases, qtys, allocated, toast, onClose, onSaved]);
+  }, [purchases, qtys, prices, allocated, toast, onClose, onSaved]);
 
   return (
     <BottomSheet open={open} onClose={onClose} title={label}>
@@ -183,12 +187,16 @@ export function PurchaseDaySheet({
           </ul>
         </div>
 
+        {/* Blocked while the pins exceed the bill, because allocateTotal gives
+            every unpinned row zero in that case -- and a saved ৳0 is
+            indistinguishable from something that was genuinely free. The
+            banner above already says what is wrong. */}
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || overshoot}
           className="w-full py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Save this shop"}
+          {saving ? "Saving…" : overshoot ? "Total is too low" : "Save this shop"}
         </button>
       </div>
     </BottomSheet>

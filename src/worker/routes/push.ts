@@ -37,37 +37,45 @@ push.post("/push/subscribe", requireMember, async (c) => {
 
   const now = nowSeconds();
 
-  // Upsert: if this endpoint already exists (same browser re-subscribing),
-  // update rather than insert a duplicate.
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM push_subscription WHERE endpoint = ?",
+  // One statement rather than select-then-write. Reading the row first was
+  // check-then-act against a UNIQUE column, so a device re-subscribing while
+  // the service worker also re-registers -- the common iOS pattern -- could
+  // have both attempts miss the lookup and the loser blow up with a raw
+  // constraint error.
+  //
+  // The DO UPDATE is scoped to the member who already owns the row. Without
+  // that, anyone who learned another member's endpoint could re-point it at
+  // themselves: the other phone would quietly stop receiving digests and start
+  // delivering them to the thief, with nothing visible on either device.
+  const result = await c.env.DB.prepare(
+    `INSERT INTO push_subscription (id, member_id, endpoint, p256dh, auth, user_agent, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE
+        SET p256dh = excluded.p256dh,
+            auth = excluded.auth,
+            user_agent = excluded.user_agent,
+            failure_count = 0
+      WHERE push_subscription.member_id = excluded.member_id`,
   )
-    .bind(endpoint)
-    .first<{ id: string }>();
+    .bind(
+      crypto.randomUUID(),
+      session.memberId,
+      endpoint,
+      p256dh,
+      auth,
+      body.userAgent ?? null,
+      now,
+    )
+    .run();
 
-  if (existing) {
-    await c.env.DB.prepare(
-      `UPDATE push_subscription
-         SET member_id = ?, p256dh = ?, auth = ?, user_agent = ?, failure_count = 0
-       WHERE id = ?`,
-    )
-      .bind(session.memberId, p256dh, auth, body.userAgent ?? null, existing.id)
-      .run();
-  } else {
-    await c.env.DB.prepare(
-      `INSERT INTO push_subscription (id, member_id, endpoint, p256dh, auth, user_agent, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        crypto.randomUUID(),
-        session.memberId,
-        endpoint,
-        p256dh,
-        auth,
-        body.userAgent ?? null,
-        now,
-      )
-      .run();
+  // Zero rows means the endpoint belongs to the other member. Nothing was
+  // written, and saying so is better than reporting a success that silently
+  // did nothing.
+  if ((result.meta.changes ?? 0) === 0) {
+    return c.json(
+      { error: "endpoint_taken", message: "That device is already registered to someone else." },
+      409,
+    );
   }
 
   return c.json({ ok: true });

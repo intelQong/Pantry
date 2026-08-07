@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import type { Member } from "@shared/types";
 import * as api from "../api";
+import { clearSnapshots } from "../lib/cache";
 import { useToast } from "../components/Toast";
 import { usePushSubscription } from "../hooks/usePushSubscription";
 import { Icon } from "../components/Icon";
@@ -114,8 +115,16 @@ export function SettingsScreen({
   );
 
   const handleLogout = useCallback(async () => {
-    await api.logout();
-    onRefresh();
+    try {
+      await api.logout();
+    } finally {
+      // Even if the request failed. The intent is to leave this device, and
+      // the cached session snapshot is what App.boot restores when it cannot
+      // reach the server -- leaving it behind would drop the next person
+      // straight back into this household, offline, as this member.
+      clearSnapshots();
+      onRefresh();
+    }
   }, [onRefresh]);
 
   return (

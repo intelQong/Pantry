@@ -24,8 +24,17 @@ export function formatMoney(minorUnits: number | null | undefined): string {
  * losing a poisha.
  */
 export function parseMoney(input: string): number | null {
-  const cleaned = input.replace(/[^\d.]/g, "").trim();
+  // Only the currency symbol, thousands separators and surrounding space are
+  // stripped. Deleting every non-digit instead -- which this used to do -- also
+  // deleted the minus sign and the exponent, so the `major < 0` guard below
+  // could never fire: "-5" arrived as "5" and was charged as ৳5, and "1e9"
+  // arrived as "19".
+  const cleaned = input.replace(/[৳,\s]/g, "");
   if (!cleaned) return null;
+
+  // A plain decimal number and nothing else. Rejects "1e9", "-5", "12.5.5",
+  // "abc" and "1/2" outright rather than salvaging a number from them.
+  if (!/^\d*\.?\d*$/.test(cleaned) || cleaned === ".") return null;
 
   const major = Number(cleaned);
   if (!Number.isFinite(major) || major < 0) return null;

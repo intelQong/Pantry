@@ -3,6 +3,7 @@ import type { ItemWithStatus, Category } from "@shared/types";
 import * as api from "../api";
 import { Icon, type IconName } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { LoadFailed } from "../components/LoadFailed";
 import { StatusStrip } from "../components/StatusStrip";
 import { useToast } from "../components/Toast";
 import { useOutbox } from "../components/Outbox";
@@ -34,6 +35,7 @@ export function TodayScreen({
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [listCount, setListCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [stale, setStale] = useState(false);
   const [adding, setAdding] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -46,6 +48,7 @@ export function TodayScreen({
   const catMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   const load = useCallback(async () => {
+    setFailed(false);
     try {
       const [today, list] = await Promise.all([api.getToday(), api.getList()]);
       writeSnapshot("today", today);
@@ -58,7 +61,14 @@ export function TodayScreen({
       // seen. An empty one reads as "the app is broken" rather than "the phone
       // has no signal", which is why it shows the last known pantry instead --
       // labelled, so nothing here is mistaken for live.
-      if (!isOffline(err)) throw err;
+      // A failure that is not the network is the server erroring. Falling back
+      // to the cache there would show a stale list as though it were live, and
+      // rethrowing (as this used to) escapes the effect as an unhandled
+      // rejection and leaves the screen claiming the pantry is empty.
+      if (!isOffline(err)) {
+        setFailed(true);
+        return;
+      }
       const cached = readSnapshot<ItemWithStatus[]>("today");
       if (cached) {
         setItems(cached.value);
@@ -96,6 +106,7 @@ export function TodayScreen({
   );
 
   if (loading) return <LoadingSpinner />;
+  if (failed) return <LoadFailed offline={false} onRetry={load} />;
 
   const total = items.length;
   const urgent = items.filter((i) => i.status !== "ok");

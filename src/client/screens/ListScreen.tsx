@@ -8,6 +8,7 @@ import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
 import type { OutboxOp } from "../lib/outbox";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
+import { LoadFailed } from "../components/LoadFailed";
 import { useToast } from "../components/Toast";
 import { useOutbox } from "../components/Outbox";
 
@@ -21,6 +22,7 @@ export function ListScreen({
   const [entries, setEntries] = useState<ListEntry[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { toast } = useToast();
@@ -30,6 +32,7 @@ export function ListScreen({
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
   const fetchAll = useCallback(async () => {
+    setFailed(false);
     try {
       const [listData, allItems] = await Promise.all([api.getList(), api.getItems()]);
       // Utilities are not bought at the shop, so they stay out of quick-add.
@@ -42,7 +45,14 @@ export function ListScreen({
       setEntries(listData);
       setItems(itemsData);
     } catch (err) {
-      if (!isOffline(err)) throw err;
+      // A failure that is not the network is the server erroring. Falling back
+      // to the cache there would show a stale list as though it were live, and
+      // rethrowing (as this used to) escapes the effect as an unhandled
+      // rejection and leaves the screen claiming the pantry is empty.
+      if (!isOffline(err)) {
+        setFailed(true);
+        return;
+      }
       setEntries(readSnapshot<ListEntry[]>("list")?.value ?? []);
       setItems(readSnapshot<Item[]>("items")?.value ?? []);
     } finally {
@@ -264,6 +274,7 @@ export function ListScreen({
   );
 
   if (loading) return <LoadingSpinner />;
+  if (failed) return <LoadFailed offline={false} onRetry={fetchAll} />;
 
   // Group entries by category
   const grouped: { cat: Category | null; entries: ListEntry[] }[] = [];

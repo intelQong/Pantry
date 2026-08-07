@@ -41,15 +41,6 @@ export async function runDigestSweep(env: Env, nowSecondsValue: number): Promise
 
     if (isQuietHour(hour, member.quiet_start, member.quiet_end)) continue;
 
-    // One row per member per local day guards against double-sending when a
-    // cron run is retried, or the Worker redeploys mid-hour.
-    const alreadySent = await env.DB.prepare(
-      "SELECT 1 FROM notification_log WHERE member_id = ? AND kind = 'restock_digest' AND local_date = ?",
-    )
-      .bind(member.member_id, date)
-      .first();
-    if (alreadySent) continue;
-
     // Non-archived staples that need attention, excluding anything already
     // sitting on the pending shop list -- nagging about something already
     // handled would just teach everyone to ignore the notification.
@@ -78,6 +69,24 @@ export async function runDigestSweep(env: Env, nowSecondsValue: number): Promise
       .map((row) => row.name)
       .join(", ");
 
+    // One row per member per local day, claimed *before* sending.
+    //
+    // Writing the row afterwards would be check-then-act across an await: two
+    // overlapping cron runs would both find no row, both push, and then the
+    // loser's insert would throw a UNIQUE error from outside the try below --
+    // ending the sweep, so every member after this one silently gets no digest
+    // at all. Claiming first lets idx_notification_dedupe decide the race, and
+    // only the winner sends. It is claimed here rather than at the top of the
+    // loop so that a member with nothing due today can still be told later, if
+    // something falls due before their notify hour passes.
+    const claim = await env.DB.prepare(
+      `INSERT OR IGNORE INTO notification_log (id, member_id, kind, local_date, sent_at, item_count)
+       VALUES (?,?,?,?,?,?)`,
+    )
+      .bind(crypto.randomUUID(), member.member_id, "restock_digest", date, nowSecondsValue, due.length)
+      .run();
+    if ((claim.meta.changes ?? 0) === 0) continue;
+
     // One member's delivery blowing up must not abort the sweep for everyone
     // else -- this loop is the only thing standing between the household and
     // silently receiving no reminders at all.
@@ -85,14 +94,13 @@ export async function runDigestSweep(env: Env, nowSecondsValue: number): Promise
       await sendToMember(env, member.member_id, { title, body });
     } catch (err) {
       console.error("Digest send failed for member", member.member_id, err);
-      continue; // no log row, so the next sweep will retry
+      // Release the claim so the next sweep retries, rather than recording a
+      // digest that never arrived.
+      await env.DB.prepare(
+        "DELETE FROM notification_log WHERE member_id = ? AND kind = 'restock_digest' AND local_date = ?",
+      )
+        .bind(member.member_id, date)
+        .run();
     }
-
-    await env.DB.prepare(
-      `INSERT INTO notification_log (id, member_id, kind, local_date, sent_at, item_count)
-       VALUES (?,?,?,?,?,?)`,
-    )
-      .bind(crypto.randomUUID(), member.member_id, "restock_digest", date, nowSecondsValue, due.length)
-      .run();
   }
 }

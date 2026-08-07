@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import type { Category, ItemWithStatus, InsightsResponse, SpendBucket } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
+import { LoadFailed } from "../components/LoadFailed";
 import { formatMoney } from "../lib/money";
 import { isOffline } from "../lib/cache";
 
@@ -16,32 +17,34 @@ export function InsightsScreen({ categories, navigate }: { categories: Category[
   const [cadence, setCadence] = useState<Cadence>("month");
   const [showBreakdown, setShowBreakdown] = useState(false);
 
-  const [unreachable, setUnreachable] = useState(false);
+  const [failure, setFailure] = useState<"offline" | "error" | null>(null);
+
+  const load = useCallback(async () => {
+    setFailure(null);
+    try {
+      const [all, list, insights] = await Promise.all([
+        api.getItems(),
+        api.getList(),
+        api.getInsights(),
+      ]);
+      setItems(all);
+      setListItemIds(
+        new Set(list.map((e) => e.itemId).filter((id): id is string => id !== null)),
+      );
+      setData(insights);
+    } catch (err) {
+      // Every figure on this screen is aggregated server-side over the whole
+      // purchase history, so there is nothing meaningful to cache: a stale
+      // spend total looks exactly like a current one and would be believed.
+      // Saying so is the only honest option -- and rethrowing here used to
+      // leave the screen on its spinner for good.
+      setFailure(isOffline(err) ? "offline" : "error");
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [all, list, insights] = await Promise.all([
-          api.getItems(),
-          api.getList(),
-          api.getInsights(),
-        ]);
-        setItems(all);
-        setListItemIds(
-          new Set(list.map((e) => e.itemId).filter((id): id is string => id !== null)),
-        );
-        setData(insights);
-      } catch (err) {
-        // Every figure on this screen is aggregated server-side over the whole
-        // purchase history, so there is nothing meaningful to cache: a stale
-        // spend total looks exactly like a current one and would be believed.
-        // Saying the screen needs a connection is the only honest option.
-        if (!isOffline(err)) throw err;
-        setUnreachable(true);
-      }
-    };
     load();
-  }, []);
+  }, [load]);
 
   const stats = useMemo(() => {
     if (!items) return null;
@@ -85,17 +88,13 @@ export function InsightsScreen({ categories, navigate }: { categories: Category[
   const peak = Math.max(1, ...buckets.map((b) => b.spend));
   const periodTotal = buckets.reduce((sum, b) => sum + b.spend, 0);
 
-  if (unreachable) {
+  if (failure) {
     return (
       <div className="safe-top">
         <header className="px-5 pt-7 pb-5">
           <h1 className="screen-title">Insights</h1>
         </header>
-        <EmptyState
-          icon="cloud-off"
-          title="Insights need a connection"
-          subtitle="Spending and consumption are worked out from your whole purchase history. Everything you buy offline is saved and counted once you're back on."
-        />
+        <LoadFailed offline={failure === "offline"} onRetry={load} />
       </div>
     );
   }

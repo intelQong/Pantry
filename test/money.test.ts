@@ -47,9 +47,22 @@ describe("parseMoney", () => {
     expect(parseMoney("0.006")).toBe(1);
   });
 
-  it("rejects nonsense and negatives", () => {
+  it("rejects nonsense and negatives instead of salvaging a number", () => {
     expect(parseMoney("abc")).toBeNull();
-    expect(parseMoney("-5")).toBe(500); // the minus is stripped as punctuation
+    // Stripping every non-digit used to turn these into confident prices: the
+    // minus vanished and "-5" was charged as ৳5, while "1e9" became ৳19.
+    expect(parseMoney("-5")).toBeNull();
+    expect(parseMoney("1e9")).toBeNull();
+    expect(parseMoney("12.5.5")).toBeNull();
+    expect(parseMoney("1/2")).toBeNull();
+    expect(parseMoney(".")).toBeNull();
+  });
+
+  it("still accepts what someone actually types", () => {
+    expect(parseMoney("৳1,200")).toBe(120000);
+    expect(parseMoney(" 340 ")).toBe(34000);
+    expect(parseMoney("340.5")).toBe(34050);
+    expect(parseMoney(".5")).toBe(50);
   });
 });
 

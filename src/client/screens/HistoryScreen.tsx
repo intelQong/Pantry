@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { PurchaseWithItem } from "@shared/types";
+import type { PurchaseWithItem, Category } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
+import { LoadFailed } from "../components/LoadFailed";
 import { PurchaseDaySheet } from "../components/PurchaseDaySheet";
+import { ItemDetailSheet } from "../components/ItemDetailSheet";
 import { formatMoney } from "../lib/money";
 import { isOffline } from "../lib/cache";
 import { groupByDay } from "../lib/utilities";
@@ -16,12 +18,20 @@ import { groupByDay } from "../lib/utilities";
  * as statistics: Insights answers "how much on groceries this month", this
  * answers "what did I actually buy on Saturday, and what did it cost".
  */
-export function HistoryScreen({ navigate }: { navigate: (path: string) => void }) {
+export function HistoryScreen({
+  categories,
+  navigate,
+}: {
+  categories: Category[];
+  navigate: (path: string) => void;
+}) {
   const [purchases, setPurchases] = useState<PurchaseWithItem[] | null>(null);
-  const [unreachable, setUnreachable] = useState(false);
+  const [failure, setFailure] = useState<"offline" | "error" | null>(null);
   const [editingDay, setEditingDay] = useState<string | null>(null);
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    setFailure(null);
     api
       .getPurchases()
       .then(setPurchases)
@@ -29,8 +39,7 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
         // A past shop never changes, so unlike Insights this would be honest to
         // cache. It is not cached yet only because nothing else writes it --
         // worth doing the day someone wants to check a price in the aisle.
-        if (!isOffline(err)) throw err;
-        setUnreachable(true);
+        setFailure(isOffline(err) ? "offline" : "error");
       });
   }, []);
 
@@ -44,15 +53,11 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
     [days],
   );
 
-  if (unreachable) {
+  if (failure) {
     return (
       <div className="safe-top">
         <Header count={null} total={0} navigate={navigate} />
-        <EmptyState
-          icon="cloud-off"
-          title="History needs a connection"
-          subtitle="It lives on the server so both phones see the same trips."
-        />
+        <LoadFailed offline={failure === "offline"} onRetry={load} />
       </div>
     );
   }
@@ -96,7 +101,7 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
               {day.purchases.map((p) => (
                 <li key={p.id} className="flex items-center gap-3 py-2">
                   <button
-                    onClick={() => navigate(`items/${p.itemId}`)}
+                    onClick={() => setOpenItemId(p.itemId)}
                     className="flex-1 min-w-0 text-left text-sm text-text truncate hover:text-accent-text transition-colors"
                   >
                     {p.itemName}
@@ -126,6 +131,16 @@ export function HistoryScreen({ navigate }: { navigate: (path: string) => void }
           </section>
         ))}
       </div>
+
+      {openItemId !== null && (
+        <ItemDetailSheet
+          itemId={openItemId}
+          categories={categories}
+          open
+          onClose={() => setOpenItemId(null)}
+          onUpdated={load}
+        />
+      )}
 
       {editingDay !== null && (
         <PurchaseDaySheet

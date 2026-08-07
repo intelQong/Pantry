@@ -8,6 +8,7 @@ import { parseQty } from "../lib/numbers";
 import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
 import type { OutboxOp } from "../lib/outbox";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { LoadFailed } from "../components/LoadFailed";
 import { useToast } from "../components/Toast";
 import { useOutbox } from "../components/Outbox";
 
@@ -67,6 +68,7 @@ export function ShopModeScreen({
 }) {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [priceInputId, setPriceInputId] = useState<string | null>(null);
   const [pendingQty, setPendingQty] = useState("");
   const [pendingPrice, setPendingPrice] = useState<number | null>(null);
@@ -87,6 +89,7 @@ export function ShopModeScreen({
       (op): op is Extract<OutboxOp, { kind: "add" }> => op.kind === "add",
     );
     const load = async () => {
+      setFailed(false);
       try {
         const entries = await api.getList();
         writeSnapshot("list", entries);
@@ -95,7 +98,14 @@ export function ShopModeScreen({
         // The list is the one thing this screen cannot do without, and this is
         // the screen most likely to be opened with no signal. Fall back to
         // whatever the last successful fetch saw rather than showing 0/0.
-        if (!isOffline(err)) throw err;
+        // A failure that is not the network is the server erroring. Falling back
+        // to the cache there would show a stale list as though it were live, and
+        // rethrowing (as this used to) escapes the effect as an unhandled
+        // rejection and leaves the screen claiming the pantry is empty.
+        if (!isOffline(err)) {
+          setFailed(true);
+          return;
+        }
         const cached = readSnapshot<ListEntry[]>("list");
         setItems(toShopItems(cached?.value ?? [], queuedAdds));
       } finally {
@@ -226,6 +236,21 @@ export function ShopModeScreen({
     );
   }
 
+  if (failed) {
+    // Shop Mode is full-screen with no bottom nav, so it needs its own way out.
+    return (
+      <div className="min-h-dvh bg-surface-sunken flex flex-col items-center justify-center">
+        <LoadFailed offline={false} onRetry={() => window.location.reload()} />
+        <button
+          onClick={() => navigate("list")}
+          className="text-sm font-medium text-text-secondary underline underline-offset-2"
+        >
+          Back to the list
+        </button>
+      </div>
+    );
+  }
+
   // Group by category in aisle order
   const grouped: { cat: Category | null; items: ShopItem[] }[] = [];
   const byCategory = new Map<string | null, ShopItem[]>();
@@ -341,15 +366,6 @@ export function ShopModeScreen({
                         )}
                       </div>
 
-                      {online && item.bought && item.itemId === null && !tracked.has(item.id) && (
-                        <button
-                          onClick={() => handleTrack(item)}
-                          className="shrink-0 px-2.5 py-1 rounded-full bg-accent-50 text-accent-text text-xs font-medium hover:bg-accent-100 transition-colors"
-                        >
-                          Track it
-                        </button>
-                      )}
-
                       {tracked.has(item.id) && (
                         <span className="shrink-0 text-xs text-status-ok font-medium">Tracked</span>
                       )}
@@ -377,6 +393,22 @@ export function ShopModeScreen({
                       )}
                     </div>
                   </button>
+
+                  {/* Outside the card button, not inside it. The card is
+                      disabled once the item is resolved -- which is exactly
+                      when this appears -- and a browser sends no clicks to the
+                      descendants of a disabled button, so nested here it could
+                      never be tapped at all. */}
+                  {online && item.bought && item.itemId === null && !tracked.has(item.id) && (
+                    <div className="flex justify-end mt-1.5">
+                      <button
+                        onClick={() => handleTrack(item)}
+                        className="px-2.5 py-1 rounded-full bg-accent-50 text-accent-text text-xs font-medium hover:bg-accent-100 transition-colors"
+                      >
+                        Track it
+                      </button>
+                    </div>
+                  )}
 
                   {/* Price input (shown when tapped) */}
                   {priceInputId === item.id && !isResolved(item) && (

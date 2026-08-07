@@ -4,6 +4,7 @@ import * as api from "../api";
 import { StatusBadge } from "../components/StatusBadge";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
+import { LoadFailed } from "../components/LoadFailed";
 import { BottomSheet } from "../components/BottomSheet";
 import { PriceInput } from "../components/PriceInput";
 import { useToast } from "../components/Toast";
@@ -22,13 +23,14 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [unreachable, setUnreachable] = useState(false);
+  const [failure, setFailure] = useState<"offline" | "error" | null>(null);
   const [logging, setLogging] = useState<ItemWithStatus | null>(null);
   const { toast } = useToast();
 
   const category = categories.find((c) => c.name === "Utilities") ?? null;
 
   const fetchAll = useCallback(async () => {
+    setFailure(null);
     try {
       const allItems = await api.getItems();
       const utilities = allItems.filter((i) => i.isUtility);
@@ -44,8 +46,7 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
       // Every figure here -- status, last-paid, the log -- is a live server
       // computation or a full history list, so there is nothing honest to show
       // from a cache the way Pantry does for its read-only browse.
-      if (!isOffline(err)) throw err;
-      setUnreachable(true);
+      setFailure(isOffline(err) ? "offline" : "error");
     } finally {
       setLoading(false);
     }
@@ -70,17 +71,13 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
 
   if (loading) return <LoadingSpinner />;
 
-  if (unreachable) {
+  if (failure) {
     return (
       <div className="safe-top">
         <header className="px-5 pt-6 pb-2">
           <h1 className="screen-title">Bills</h1>
         </header>
-        <EmptyState
-          icon="zap"
-          title="Needs a connection"
-          subtitle="Bills and payment history load fresh from the server."
-        />
+        <LoadFailed offline={failure === "offline"} onRetry={fetchAll} />
       </div>
     );
   }

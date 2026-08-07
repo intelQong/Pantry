@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
+import { isValidQty } from "./purchases";
 import type { ListEntry } from "../../shared/types";
 
 const list = new Hono<AppEnv>();
@@ -146,6 +147,10 @@ list.post("/list", requireMember, async (c) => {
     if (seen) return c.json(toListEntry(seen));
   }
 
+  if (!isValidQty(body.qty ?? undefined)) {
+    return c.json({ error: "invalid_qty", message: "qty must be a positive number." }, 400);
+  }
+
   const hasItemId = !!body.itemId;
   const hasCustomName = !!body.customName?.trim();
   // The schema's CHECK enforces exactly one of these; validate up front so we
@@ -256,6 +261,10 @@ list.patch("/list/:id", requireSession, async (c) => {
   }
 
   const body = await c.req.json<{ qty?: number | null; note?: string | null }>();
+  if (body.qty !== null && !isValidQty(body.qty)) {
+    return c.json({ error: "invalid_qty", message: "qty must be a positive number." }, 400);
+  }
+
   const sets: string[] = [];
   const values: unknown[] = [];
   if (body.qty !== undefined) {

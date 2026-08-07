@@ -208,3 +208,88 @@ describe("correcting a logged shop", () => {
     expect(all.length).toBeGreaterThan(0);
   });
 });
+
+describe("input the server must not trust", () => {
+  let itemId: string;
+  let entryId: string;
+
+  beforeAll(async () => {
+    const item = await json("/api/items", { name: "Guarded Rice" }, memberCookie);
+    itemId = (await item.json<{ id: string }>()).id;
+    const entry = await json("/api/list", { itemId }, memberCookie);
+    entryId = (await entry.json<{ id: string }>()).id;
+  });
+
+  /**
+   * Sends the body as raw text.
+   *
+   * JSON.stringify turns Infinity into null, so the one value most worth
+   * testing cannot be expressed through the normal helper -- and null is a
+   * legitimate "no quantity" everywhere here, so it would quietly pass.
+   */
+  const rawBody = (path: string, body: string, method = "POST") =>
+    SELF.fetch(`https://pantry.test${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", Cookie: memberCookie },
+      body,
+    });
+
+  // Infinity binds happily into a REAL column and then poisons every SUM(qty)
+  // that item appears in, permanently and invisibly.
+  const nonsense = ["1e400", "-3", "0", "{}", '"2"'] as const;
+
+  for (const qty of nonsense) {
+    it(`rejects a quantity of ${qty} everywhere it can be written`, async () => {
+      expect((await rawBody("/api/list", `{"itemId":"${itemId}","qty":${qty}}`)).status).toBe(400);
+      expect((await rawBody(`/api/list/${entryId}`, `{"qty":${qty}}`, "PATCH")).status).toBe(400);
+      expect((await rawBody("/api/purchases", `{"itemId":"${itemId}","qty":${qty}}`)).status).toBe(400);
+      expect((await rawBody(`/api/list/${entryId}/bought`, `{"qty":${qty}}`)).status).toBe(400);
+    });
+  }
+
+  it("still lets a quantity be cleared back to unspecified", async () => {
+    const res = await json(`/api/list/${entryId}`, { qty: null }, memberCookie, "PATCH");
+    expect(res.status).toBe(200);
+    expect((await res.json<{ qty: number | null }>()).qty).toBeNull();
+  });
+
+  it("holds PATCH /items to the same rules as POST", async () => {
+    // A zero interval makes computeStatus report the item overdue on every
+    // read, forever; a null default_qty hits a NOT NULL constraint as a 500.
+    for (const body of [
+      { restockIntervalDays: 0 },
+      { restockIntervalDays: -30 },
+      { restockIntervalDays: 400 },
+      { defaultQty: null },
+      { defaultQty: -5 },
+      { categoryId: "" },
+    ]) {
+      const res = await json(`/api/items/${itemId}`, body, memberCookie, "PATCH");
+      expect([400, 404]).toContain(res.status);
+    }
+
+    // The item is untouched by all of that.
+    const after = await (await get("/api/items", memberCookie)).json<
+      Array<{ id: string; restockIntervalDays: number; defaultQty: number }>
+    >();
+    const rice = after.find((i) => i.id === itemId)!;
+    expect(rice.restockIntervalDays).toBe(7);
+    expect(rice.defaultQty).toBe(1);
+  });
+
+  it("does not create a pantry item when the entry was already resolved", async () => {
+    const created = await json("/api/list", { customName: "Ghost Candles" }, memberCookie);
+    const ghost = (await created.json<{ id: string }>()).id;
+
+    // The other phone skipped it first.
+    await json(`/api/list/${ghost}/skip`, {}, memberCookie);
+
+    const res = await json(`/api/list/${ghost}/bought`, {}, memberCookie);
+    expect(await res.json<{ alreadyResolved: boolean }>()).toMatchObject({ alreadyResolved: true });
+
+    // Without the status check this left a real staple behind, stamped as just
+    // purchased, with no purchase row and nothing on screen to explain it.
+    const items = await (await get("/api/items", memberCookie)).json<Array<{ name: string }>>();
+    expect(items.map((i) => i.name)).not.toContain("Ghost Candles");
+  });
+});

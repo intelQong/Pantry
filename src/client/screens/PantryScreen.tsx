@@ -6,6 +6,7 @@ import { Jar, JarClipDef } from "../components/Jar";
 import { StatusStrip } from "../components/StatusStrip";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
+import { LoadFailed } from "../components/LoadFailed";
 import { ItemDetailSheet } from "../components/ItemDetailSheet";
 import { AddItemSheet } from "../components/AddItemSheet";
 import { readSnapshot, writeSnapshot, isOffline } from "../lib/cache";
@@ -25,11 +26,13 @@ const TONE: Record<RestockStatus, string> = {
 export function PantryScreen({ categories }: { categories: Category[] }) {
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
   const fetchItems = useCallback(async () => {
+    setFailed(false);
     try {
       // Gas, electricity and wifi are items so they can ride the purchase loop,
       // but the pantry is a grocery browse -- they belong on Bills. Filtered
@@ -40,7 +43,14 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
     } catch (err) {
       // Read-only offline. Editing an item, or adding one, still needs the
       // network -- those sheets say so themselves when their save fails.
-      if (!isOffline(err)) throw err;
+      // A failure that is not the network is the server erroring. Falling back
+      // to the cache there would show a stale list as though it were live, and
+      // rethrowing (as this used to) escapes the effect as an unhandled
+      // rejection and leaves the screen claiming the pantry is empty.
+      if (!isOffline(err)) {
+        setFailed(true);
+        return;
+      }
       setItems(readSnapshot<ItemWithStatus[]>("items")?.value ?? []);
     } finally {
       setLoading(false);
@@ -91,6 +101,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
   const matchCount = shelves.reduce((n, s) => n + s.rows.length, 0);
 
   if (loading) return <LoadingSpinner />;
+  if (failed) return <LoadFailed offline={false} onRetry={fetchItems} />;
 
   return (
     <div className="safe-top">

@@ -37,6 +37,17 @@ function isValidPriceTotal(value: unknown): value is number | null | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
+/**
+ * qty is a REAL column, so anything numeric binds happily -- including
+ * Infinity, which JSON.parse produces from `1e400` and which then poisons every
+ * SUM(qty) that item appears in, permanently and invisibly. Must be absent, or
+ * a finite positive number.
+ */
+export function isValidQty(value: unknown): value is number | undefined {
+  if (value === undefined) return true;
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 /** How far back a client is allowed to backdate a purchase. */
 const BACKDATE_WINDOW_SECONDS = 30 * 86400;
 
@@ -69,13 +80,29 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
   const id = c.req.param("id");
 
   const entry = await c.env.DB.prepare(
-    "SELECT id, item_id, custom_name, qty FROM list_entry WHERE id = ? AND household_id = ?",
+    "SELECT id, item_id, custom_name, qty, status FROM list_entry WHERE id = ? AND household_id = ?",
   )
     .bind(id, session.householdId)
-    .first<{ id: string; item_id: string | null; custom_name: string | null; qty: number | null }>();
+    .first<{
+      id: string;
+      item_id: string | null;
+      custom_name: string | null;
+      qty: number | null;
+      status: string;
+    }>();
 
   if (!entry) {
     return c.json({ error: "not_found", message: "No such list entry." }, 404);
+  }
+
+  // Every write below is guarded by the entry still being pending, except the
+  // item creation for a free-text entry -- that one runs on its own, before the
+  // batch, so it has to be stopped here instead. Without this, a queued buy
+  // arriving after the other phone skipped the entry would leave a real pantry
+  // item behind: stamped as just purchased, with no purchase row to show for
+  // it, nagging in a week and holding the name against a later genuine add.
+  if (entry.status !== "pending") {
+    return c.json({ ok: true, purchaseId: null, alreadyResolved: true });
   }
 
   const body = await c.req.json<{
@@ -89,6 +116,9 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
       { error: "invalid_price", message: "priceTotal must be a non-negative whole number of minor units." },
       400,
     );
+  }
+  if (!isValidQty(body.qty)) {
+    return c.json({ error: "invalid_qty", message: "qty must be a positive number." }, 400);
   }
   if (!isValidPurchasedAt(body.purchasedAt)) {
     return c.json(
@@ -228,6 +258,9 @@ purchases.post("/purchases", requireMember, async (c) => {
       { error: "invalid_price", message: "priceTotal must be a non-negative whole number of minor units." },
       400,
     );
+  }
+  if (!isValidQty(body.qty)) {
+    return c.json({ error: "invalid_qty", message: "qty must be a positive number." }, 400);
   }
   if (!isValidPurchasedAt(body.purchasedAt)) {
     return c.json(

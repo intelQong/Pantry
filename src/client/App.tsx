@@ -148,7 +148,7 @@ export function App() {
           {route.page === "pantry" && <PantryScreen categories={categories} />}
           {route.page === "utilities" && <UtilitiesScreen categories={categories} />}
           {route.page === "insights" && <InsightsScreen categories={categories} navigate={navigate} />}
-          {route.page === "history" && <HistoryScreen navigate={navigate} />}
+          {route.page === "history" && <HistoryScreen categories={categories} navigate={navigate} />}
           {route.page === "settings" && (
             <SettingsScreen
               currentMemberId={state.memberId}

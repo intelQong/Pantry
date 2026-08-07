@@ -88,7 +88,7 @@ export function ItemDetailSheet({
     } finally {
       setSaving(false);
     }
-  }, [itemId, name, categoryId, unit, defaultQty, brand, notes, interval, locked, isStaple, toast, onUpdated]);
+  }, [itemId, name, categoryId, unit, defaultQty, brand, notes, interval, locked, isStaple, price, toast, onUpdated]);
 
   const handleDelete = useCallback(async () => {
     try {

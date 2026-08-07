@@ -8,24 +8,19 @@ export type Route =
   | { page: "utilities" }
   | { page: "insights" }
   | { page: "history" }
-  | { page: "settings" }
-  | { page: "item"; id: string };
+  | { page: "settings" };
 
 function parseHash(hash: string): Route {
   const h = hash.replace(/^#\/?/, "");
-  if (h.startsWith("items/")) {
-    const id = h.slice(6);
-    if (id) return { page: "item", id };
-  }
   switch (h) {
-    case "list":     return { page: "list" };
-    case "shop":     return { page: "shop" };
+    case "list":      return { page: "list" };
+    case "shop":      return { page: "shop" };
     case "pantry":    return { page: "pantry" };
     case "utilities": return { page: "utilities" };
     case "insights":  return { page: "insights" };
     case "history":   return { page: "history" };
-    case "settings": return { page: "settings" };
-    default:         return { page: "today" };
+    case "settings":  return { page: "settings" };
+    default:          return { page: "today" };
   }
 }
 
