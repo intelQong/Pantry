@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { ProductIcon } from "../components/ProductIcon";
 import type { PurchaseWithItem, Category } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
@@ -100,6 +101,7 @@ export function HistoryScreen({
             <ul className="divide-y divide-border-subtle">
               {day.purchases.map((p) => (
                 <li key={p.id} className="flex items-center gap-3 py-2">
+                  <ProductIcon name={p.itemName} size="sm" />
                   <button
                     onClick={() => setOpenItemId(p.itemId)}
                     className="flex-1 min-w-0 text-left text-sm text-text truncate hover:text-accent-text transition-colors"

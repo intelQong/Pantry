@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { ProductIcon } from "../components/ProductIcon";
 import type { ItemWithStatus, Category, RestockStatus } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
@@ -188,7 +189,13 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
                        line running the width of the shelf. */
                     className={`flex flex-col items-center pt-2 pb-1.5 border-b border-border active:scale-95 transition-transform ${TONE[item.status]}`}
                   >
-                    <Jar fill={jarFill(item)} urgent={item.status !== "ok"} className="w-14" />
+                    {/* The product's icon sits on the jar like a label. */}
+                    <span className="relative">
+                      <Jar fill={jarFill(item)} urgent={item.status !== "ok"} className="w-14" />
+                      <span className="absolute left-1/2 top-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-raised/90 p-1 shadow-sm">
+                        <ProductIcon name={item.name} size="sm" />
+                      </span>
+                    </span>
                     <span className="mt-1.5 w-full truncate px-1 text-xs font-medium text-text">
                       {item.name}
                     </span>

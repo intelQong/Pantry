@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { ProductIcon } from "../components/ProductIcon";
 import type { ItemWithStatus, Category } from "@shared/types";
 import * as api from "../api";
 import { Icon, type IconName } from "../components/Icon";
@@ -279,9 +280,9 @@ export function TodayScreen({
                           key={item.id}
                           className="flex items-center gap-3 py-2.5 pl-4 pr-3"
                         >
-                          {/* A status dot, as iOS marks a row; the section
-                              heading above already says it in words. */}
-                          <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${cfg.bar}`} aria-hidden="true" />
+                          {/* The section heading above already says the
+                              status, so the row leads with what it is. */}
+                          <ProductIcon name={item.name} />
 
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-text truncate">{item.name}</p>

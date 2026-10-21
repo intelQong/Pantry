@@ -45,7 +45,9 @@ export function BottomNav({
                 active ? "text-accent-text" : "text-text-tertiary"
               }`}
             >
-              <Icon name={tab.icon} className="w-6 h-6" strokeWidth={active ? 2.2 : 1.7} />
+              <span key={active ? "on" : "off"} className={active ? "animate-tab-pop" : ""}>
+                <Icon name={tab.icon} className="w-6 h-6" strokeWidth={active ? 2.2 : 1.7} />
+              </span>
               <span className="text-[0.6875rem] font-medium">{tab.label}</span>
             </button>
           );

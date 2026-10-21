@@ -30,6 +30,9 @@ Workers and D1.
 - **Bills.** Gas, electricity and wifi are tracked on their own screen, with the same
   learned due dates as groceries. They are paid up front, so they are never added to
   spending or to the month's grocery bill.
+- **Product icons.** Every item gets a monochrome icon picked from its name, so
+  "Masoor Dal", "moong dal" and "Chana Dal" all show lentils. Unknown items show their
+  initial.
 - **History and audit log.** Every past shop, grouped by day and correctable afterwards,
   plus an append-only log of every deletion.
 
@@ -162,6 +165,7 @@ VAPID key pair for good: rotating it invalidates every phone's subscription.
 | `npm run deploy` | Build and deploy to Cloudflare |
 | `npm run db:migrate:remote` | Apply migrations to the production database |
 | `node scripts/render-icons.mjs` | Re-render the app icons from `scripts/icons/` |
+| `node scripts/product-icons.mjs` | Rebuild the bundled product icons after changing `src/client/lib/productIcon.ts` |
 
 ---
 
@@ -266,5 +270,8 @@ any action that is attributed to a person requires.
 ## Credits
 
 Designed and built by **Mahmudul Khan** · [mahmudulkhan.com](https://www.mahmudulkhan.com)
+
+Product icons are from [Fluent Emoji High Contrast](https://github.com/microsoft/fluentui-emoji)
+by Microsoft, used under the MIT License.
 
 Released under the [MIT License](LICENSE).

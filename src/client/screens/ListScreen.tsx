@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ProductIcon } from "../components/ProductIcon";
 import type { ListEntry, Category, Item } from "@shared/types";
 import * as api from "../api";
 import { Icon } from "../components/Icon";
@@ -387,6 +388,7 @@ export function ListScreen({
                       key={entry.id}
                       className="flex items-center gap-3 px-4 py-2"
                     >
+                      <ProductIcon name={entry.displayName} />
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-1.5">
                           <span className="block text-sm font-medium text-text truncate">
@@ -445,7 +447,13 @@ export function ListScreen({
           </div>
 
           {/* Enter Shop Mode button */}
-          <div className="fixed bottom-20 left-0 right-0 px-4 pb-2 z-30">
+          {/* Sits just above the tab bar, which is 3.25rem plus the
+              home-indicator inset -- a fixed bottom-20 ignored the inset
+              and overlapped the bar on Face ID iPhones. */}
+          <div
+            className="fixed left-0 right-0 px-4 pb-2 z-30"
+            style={{ bottom: "calc(3.25rem + env(safe-area-inset-bottom, 0px))" }}
+          >
             <button
               onClick={() => navigate("shop")}
               className="w-full py-3.5 rounded-2xl bg-accent-500 text-text-on-accent font-semibold text-sm shadow-lg hover:shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"

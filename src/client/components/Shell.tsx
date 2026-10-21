@@ -26,7 +26,9 @@ export function Shell({
       {/* The notch and the tab bar are cleared here, once, so no screen can
           forget either: the tab bar is 3.25rem plus the home-indicator inset. */}
       <main
-        className="flex-1 safe-top"
+        // A new key per tab, so each tab's screen fades in as it opens.
+        key={route.page}
+        className="flex-1 safe-top animate-screen-in"
         style={{ paddingBottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }}
       >
         {children}

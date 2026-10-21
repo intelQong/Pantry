@@ -103,6 +103,8 @@
   /* Slower than a loading spinner: this one says "working through a queue",
      not "waiting on one request". */
   --animate-spin-slow: spin 1.6s linear infinite;
+  --animate-screen-in: screen-in 0.22s var(--ease-smooth) backwards;
+  --animate-tab-pop: tab-pop 0.4s var(--ease-spring);
 }
 
 /* ------------------------------------------------------------------ */
@@ -117,6 +119,13 @@
 @keyframes shimmer    { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 @keyframes spin       { to { transform: rotate(360deg); } }
+/* Opacity only, on purpose. A transform on <main>, even mid-animation, makes it
+   the containing block for every position:fixed thing inside a screen -- the
+   Shop Mode button, sheets -- and they would jump for the length of it. iOS
+   doesn't slide between tabs either. */
+@keyframes screen-in  { from { opacity: 0; } }
+@keyframes row-in     { from { opacity: 0; transform: translateY(0.3rem); } }
+@keyframes tab-pop    { 0% { transform: scale(1); } 35% { transform: scale(0.84); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
 /* ------------------------------------------------------------------ */
 /* Dark mode: iOS dark appearance. True black page, elevated greys.    */
@@ -329,6 +338,16 @@ body:has(.sync-banner) .safe-top:not(.sync-banner) { padding-top: 0; }
   border-radius: 0 !important;
   background: transparent;
 }
+
+/* Rows settle in one after another when a list appears, and a row added
+   later arrives the same way. Capped so a long list is not kept waiting. */
+.grouped > * { animation: row-in 0.34s var(--ease-spring) backwards; }
+.grouped > :nth-child(2) { animation-delay: 25ms; }
+.grouped > :nth-child(3) { animation-delay: 50ms; }
+.grouped > :nth-child(4) { animation-delay: 75ms; }
+.grouped > :nth-child(5) { animation-delay: 100ms; }
+.grouped > :nth-child(6) { animation-delay: 125ms; }
+.grouped > :nth-child(n + 7) { animation-delay: 150ms; }
 
 .grouped > * + *::before {
   content: "";

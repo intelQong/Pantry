@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ProductIcon } from "../components/ProductIcon";
 import type { ListEntry, Category } from "@shared/types";
 import * as api from "../api";
 import { PriceInput } from "../components/PriceInput";
@@ -353,6 +354,8 @@ export function ShopModeScreen({
                         )}
                       </div>
 
+                      <ProductIcon name={item.displayName} size="lg" />
+
                       <div className="flex-1 min-w-0">
                         <span
                           className={`text-lg font-semibold tracking-tight ${
@@ -458,7 +461,11 @@ export function ShopModeScreen({
 
       {/* Done floating button */}
       {allDone && (
-        <div className="fixed bottom-6 left-4 right-4 z-30 animate-slide-up">
+        <div
+          className="fixed left-4 right-4 z-30 animate-slide-up"
+          // Clear of the home indicator, which a plain bottom-6 sat on.
+          style={{ bottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           <button
             onClick={handleExit}
             className="w-full py-4 rounded-2xl bg-status-ok text-white font-bold text-base shadow-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
