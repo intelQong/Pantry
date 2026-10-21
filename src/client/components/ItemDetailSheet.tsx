@@ -98,8 +98,8 @@ export function ItemDetailSheet({
       toast(`${item?.name ?? "Item"} deleted`);
       onClose();
       onUpdated();
-    } catch {
-      toast("Failed to delete", "error");
+    } catch (err) {
+      toast(err instanceof api.ApiRequestError ? err.body.message : "Failed to delete", "error");
     }
   }, [itemId, item, toast, onClose, onUpdated]);
 

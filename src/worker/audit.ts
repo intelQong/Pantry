@@ -13,6 +13,12 @@ export async function auditStatement(
   db: D1Database,
   session: SessionPayload,
   entry: { action: string; entityType: string; entityId: string; summary: string; details: unknown },
+  /**
+   * A condition the row is written under, checked inside the batch -- pass the
+   * same one the DELETE carries, so the record and the removal land together
+   * or neither does.
+   */
+  onlyIf?: { sql: string; params: unknown[] },
 ): Promise<D1PreparedStatement> {
   const member = await db
     .prepare("SELECT name FROM member WHERE id = ? AND household_id = ?")
@@ -22,7 +28,7 @@ export async function auditStatement(
   return db
     .prepare(
       `INSERT INTO audit_log (id, household_id, member_id, member_name, action, entity_type, entity_id, summary, details, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+       SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${onlyIf?.sql ?? "1"}`,
     )
     .bind(
       crypto.randomUUID(),
@@ -36,5 +42,6 @@ export async function auditStatement(
       entry.summary,
       JSON.stringify(entry.details),
       nowSeconds(),
+      ...(onlyIf?.params ?? []),
     );
 }

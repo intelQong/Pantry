@@ -159,3 +159,41 @@ describe("deleting an item leaves a full record of what went with it", () => {
     expect(entry.summary).toBe('Deleted item "Cascade Oats" and its 1 purchase');
   });
 });
+
+describe("an item delete racing a purchase on the other phone", () => {
+  it("deletes an item with several purchases when nothing moved", async () => {
+    const first = await (await json("/api/purchases", { itemName: "Many Buys" }, memberCookie)).json<{ itemId: string }>();
+    await json("/api/purchases", { itemId: first.itemId }, memberCookie);
+    await json("/api/purchases", { itemId: first.itemId }, memberCookie);
+    expect((await json(`/api/items/${first.itemId}`, {}, memberCookie, "DELETE")).status).toBe(200);
+  });
+
+  it("writes nothing and asks for a retry if a purchase lands between snapshot and delete", async () => {
+    const bought = await (await json("/api/purchases", { itemName: "Raced Item" }, memberCookie)).json<{ itemId: string }>();
+    const { id: householdId } = (await env.DB.prepare("SELECT id FROM household").first<{ id: string }>())!;
+    const lateId = crypto.randomUUID();
+
+    // The other phone's buy, landing after the route read the purchases but
+    // before its batch runs.
+    const batch = env.DB.batch.bind(env.DB);
+    env.DB.batch = async (statements) => {
+      env.DB.batch = batch;
+      await env.DB.prepare(
+        "INSERT INTO purchase (id, household_id, item_id, purchased_at, qty, unit) VALUES (?,?,?,?,1,'pcs')",
+      )
+        .bind(lateId, householdId, bought.itemId, 1)
+        .run();
+      return batch(statements);
+    };
+
+    const res = await json(`/api/items/${bought.itemId}`, {}, memberCookie, "DELETE");
+    env.DB.batch = batch;
+    expect(res.status).toBe(409);
+    expect(await env.DB.prepare("SELECT id FROM purchase WHERE id = ?").bind(lateId).first()).not.toBeNull();
+    const logs = await (await get("/api/audit-log", memberCookie)).json<AuditLogEntry[]>();
+    expect(logs.some((l) => l.entityId === bought.itemId)).toBe(false);
+
+    // A plain retry then goes through, and records the late purchase too.
+    expect((await json(`/api/items/${bought.itemId}`, {}, memberCookie, "DELETE")).status).toBe(200);
+  });
+});

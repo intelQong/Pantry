@@ -378,19 +378,41 @@ items.delete("/items/:id", requireMember, async (c) => {
        FROM purchase WHERE item_id = ? AND household_id = ? ORDER BY purchased_at`,
   )
     .bind(id, session.householdId)
-    .all();
+    .all<{ id: string }>();
   const n = purchases.results.length;
 
-  await c.env.DB.batch([
+  // The snapshot is read before the batch, so a purchase logged on the other
+  // phone in between would be cascaded away without being in it. Both writes
+  // are therefore guarded on the item's purchases still being exactly the
+  // snapshotted set -- compared as one sorted id list, which stays a single
+  // bound parameter however long the history is. If it moved, nothing is
+  // written and the caller is asked to try again.
+  const snapshotIds = purchases.results.map((p) => p.id).sort().join(",");
+  const unchanged = {
+    sql: `COALESCE((SELECT group_concat(id, ',') FROM
+                     (SELECT id FROM purchase WHERE item_id = ? AND household_id = ? ORDER BY id)), '') = ?`,
+    params: [id, session.householdId, snapshotIds],
+  };
+
+  const [, deleted] = await c.env.DB.batch([
     await auditStatement(c.env.DB, session, {
       action: "delete_item",
       entityType: "item",
       entityId: item.id,
       summary: `Deleted item "${item.name}"${n ? ` and its ${n} ${n === 1 ? "purchase" : "purchases"}` : ""}`,
       details: { ...item, purchases: purchases.results },
-    }),
-    c.env.DB.prepare("DELETE FROM item WHERE id = ? AND household_id = ?").bind(id, session.householdId),
+    }, unchanged),
+    c.env.DB.prepare(
+      `DELETE FROM item WHERE id = ? AND household_id = ? AND ${unchanged.sql}`,
+    ).bind(id, session.householdId, ...unchanged.params),
   ]);
+
+  if ((deleted?.meta.changes ?? 0) === 0) {
+    return c.json(
+      { error: "item_changed", message: "This item was just bought on another phone. Try deleting it again." },
+      409,
+    );
+  }
 
   return c.json({ ok: true });
 });
