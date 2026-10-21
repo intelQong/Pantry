@@ -12,7 +12,9 @@
 // under /assets/, so those URLs are immutable and cache-first is exactly right
 // for them; everything else is a fixed, known path.
 
-const VERSION = "pantry-v1";
+// Bump to retire every cached shell file, e.g. after an icon changes: icons
+// are served cache-first, so without a bump installed apps keep the old one.
+const VERSION = "pantry-v2";
 const SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
 
