@@ -1,7 +1,6 @@
 import { MadeBy } from "../components/MadeBy";
 import { useState, useCallback, useRef, useEffect } from "react";
 import * as api from "../api";
-import { BrandMark } from "../components/BrandMark";
 
 export function LoginScreen({
   householdName,
@@ -44,7 +43,7 @@ export function LoginScreen({
     <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-surface">
       <div className="w-full max-w-[19rem] animate-fade-in">
         <div className="flex flex-col items-center text-center mb-9">
-          <BrandMark className="w-12 h-12 text-accent-text mb-5" />
+          <img src="/icon-192.png" alt="" className="w-20 h-20 rounded-[1.2rem] shadow-md mb-5" />
           <h1 className="font-display text-[2rem] leading-none font-semibold text-text">Pantry</h1>
           <p className="text-sm text-text-secondary mt-2.5">{householdName}</p>
         </div>

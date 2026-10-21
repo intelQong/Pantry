@@ -113,7 +113,7 @@ Design rationale in full: [docs/DESIGN.md](docs/DESIGN.md).
 | Runtime | Cloudflare Workers |
 | API | Hono 4 |
 | Database | Cloudflare D1 (SQLite) |
-| Client | React 19, TypeScript, Vite, Tailwind CSS 4 |
+| Client | React 19, TypeScript, Vite, Tailwind CSS 4, styled to Apple's iOS Human Interface Guidelines |
 | Push | Web Push via `web-push-neo` (`aes128gcm`, the only encoding iOS accepts) |
 | Tests | Vitest with `@cloudflare/vitest-pool-workers`: a real Worker against a real D1 |
 
@@ -197,7 +197,7 @@ src/
     screens/         Today, Shopping List, Shop Mode, Inventory, Stats, History, Bills, Settings
     components/      Sheets, tab bar, jars, offline outbox, banners
     lib/             Money, offline queue and cache, date grouping, formatting
-public/              PWA manifest, icons, service worker, self-hosted fonts
+public/              PWA manifest, icons, service worker
 scripts/             Icon sources and renderer
 test/                One file per area, each against an isolated D1
 docs/                Design rationale and deployment guide

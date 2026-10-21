@@ -273,9 +273,9 @@ export function ShopModeScreen({
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={handleExit}
-            className="flex items-center gap-1 text-sm text-text-secondary hover:text-text transition-colors"
+            className="-ml-1.5 flex items-center gap-0.5 text-[1rem] text-accent-text active:opacity-50 transition-opacity"
           >
-<Icon name="chevron" className="w-4 h-4 rotate-180" strokeWidth={2} />
+            <Icon name="chevron" className="w-5 h-5 rotate-180" strokeWidth={2.4} />
             Back
           </button>
           <h1 className="font-display text-xl font-bold tracking-tight text-text">Shop Mode</h1>

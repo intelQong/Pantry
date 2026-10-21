@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 import { createContext, useContext, useCallback, useState, type ReactNode } from "react";
 
 interface Toast {
@@ -37,16 +38,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
       >
         {toasts.map((t) => (
+          // An iOS HUD: one dark frosted pill for every message, with a
+          // symbol saying how it went, rather than a slab of colour.
           <div
             key={t.id}
-            className={`animate-slide-up px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-center ${
-              t.type === "error"
-                ? "bg-danger text-white"
-                : t.type === "info"
-                  ? "bg-accent-600 text-white"
-                  : "bg-success text-white"
-            }`}
+            className="animate-pop flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium text-center text-white bg-[rgb(30_30_30/0.86)] backdrop-blur-xl"
           >
+            {t.type === "error" ? (
+              <Icon name="alert" className="w-4 h-4 shrink-0 text-[#ff453a]" strokeWidth={2.2} />
+            ) : t.type === "success" ? (
+              <Icon name="check" className="w-4 h-4 shrink-0 text-[#30d158]" strokeWidth={2.6} />
+            ) : null}
             {t.message}
           </div>
         ))}

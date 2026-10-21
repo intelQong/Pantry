@@ -271,16 +271,17 @@ export function TodayScreen({
                     {cfg.label}
                   </h3>
 
-                  <ul className="space-y-1.5">
+                  <ul className="grouped">
                     {rows.map((item) => {
                       const cat = item.categoryId ? catMap.get(item.categoryId) : null;
                       return (
                         <li
                           key={item.id}
-                          className="relative flex items-center gap-3 card-row py-2.5 pl-4 pr-2.5 overflow-hidden"
+                          className="flex items-center gap-3 py-2.5 pl-4 pr-3"
                         >
-                          {/* The rule is the status. No badge needed. */}
-                          <span className={`absolute left-0 inset-y-0 w-1 ${cfg.bar}`} />
+                          {/* A status dot, as iOS marks a row; the section
+                              heading above already says it in words. */}
+                          <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${cfg.bar}`} aria-hidden="true" />
 
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-text truncate">{item.name}</p>
@@ -301,7 +302,7 @@ export function TodayScreen({
 
                           {item.onList ? (
                             <span
-                              className="shrink-0 w-9 h-9 rounded-lg bg-status-ok-bg text-status-ok flex items-center justify-center"
+                              className="shrink-0 w-8 h-8 rounded-full bg-status-ok-bg text-status-ok flex items-center justify-center"
                               title="On the shop list"
                             >
                               <Icon name="check" className="w-4 h-4" strokeWidth={2.25} />
@@ -311,9 +312,11 @@ export function TodayScreen({
                               onClick={() => handleAdd(item)}
                               disabled={adding.has(item.id)}
                               aria-label={`Add ${item.name} to shop list`}
-                              className="shrink-0 w-9 h-9 rounded-lg bg-surface-sunken text-text-secondary flex items-center justify-center hover:bg-accent-50 hover:text-accent-text active:scale-90 transition-all disabled:opacity-40"
+                              className="shrink-0 w-11 h-11 -mr-1.5 flex items-center justify-center text-accent-text active:opacity-50 transition-opacity disabled:opacity-30"
                             >
-                              <Icon name="plus" className="w-4 h-4" strokeWidth={2.25} />
+                              <span className="w-7 h-7 rounded-full bg-accent-500 text-text-on-accent flex items-center justify-center">
+                                <Icon name="plus" className="w-4 h-4" strokeWidth={2.5} />
+                              </span>
                             </button>
                           )}
                         </li>

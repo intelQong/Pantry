@@ -303,7 +303,7 @@ export function ListScreen({
 
       {/* Quick add bar */}
       <div className="px-4 mb-3 relative">
-        <div className="flex items-center gap-2 bg-surface-sunken rounded-xl border border-border px-3 py-2 focus-within:border-accent-400 transition-all">
+        <div className="flex items-center gap-2 bg-surface-sunken rounded-xl px-3 py-2 focus-within:border-accent-400 transition-all">
           <Icon name="plus" className="w-4 h-4 text-text-tertiary shrink-0" strokeWidth={1.5} />
           <input
             ref={inputRef}
@@ -381,11 +381,11 @@ export function ListScreen({
                   )}
                   {cat?.name ?? "Other"}
                 </h3>
-                <div className="space-y-1.5">
+                <div className="grouped">
                   {groupEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="flex items-center gap-3 px-3 py-2.5 card-row"
+                      className="flex items-center gap-3 px-4 py-2"
                     >
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-1.5">

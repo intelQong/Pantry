@@ -142,7 +142,7 @@ export function SettingsScreen({
         {navigate && (
           <button
             onClick={() => navigate("today")}
-            className="px-3.5 py-1.5 rounded-xl bg-surface-sunken border border-border-subtle text-xs font-semibold text-text hover:bg-surface-raised active:scale-95 transition-all"
+            className="-mr-2 px-2 text-accent-text text-[1rem] font-semibold active:opacity-50 transition-opacity"
           >
             Done
           </button>
@@ -303,15 +303,18 @@ export function SettingsScreen({
           <h3 className="eyebrow mb-3">
             Appearance
           </h3>
-          <div className="flex gap-2">
+          {/* An iOS segmented control: one track, the choice raised in it. */}
+          <div className="flex p-0.5 rounded-[0.6rem] bg-surface-sunken" role="radiogroup" aria-label="Appearance">
             {(["system", "light", "dark"] as const).map((t) => (
               <button
                 key={t}
+                role="radio"
+                aria-checked={theme === t}
                 onClick={() => handleThemeChange(t)}
-                className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+                className={`flex-1 rounded-[0.5rem] text-sm transition-all ${
                   theme === t
-                    ? "bg-accent-500 text-text-on-accent shadow-sm"
-                    : "bg-surface-sunken text-text-secondary hover:text-text"
+                    ? "bg-surface-raised text-text font-semibold shadow-sm"
+                    : "text-text font-medium"
                 }`}
               >
                 {t === "system" ? "Auto" : t.charAt(0).toUpperCase() + t.slice(1)}
@@ -418,7 +421,7 @@ export function SettingsScreen({
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="w-full py-3 rounded-2xl border border-danger/30 text-danger text-sm font-semibold hover:bg-danger-bg transition-colors"
+          className="card w-full py-3 text-danger text-[1rem] font-normal active:bg-surface-sunken transition-colors"
         >
           Log Out
         </button>

@@ -14,7 +14,7 @@
 
 // Bump to retire every cached shell file, e.g. after an icon changes: icons
 // are served cache-first, so without a bump installed apps keep the old one.
-const VERSION = "pantry-v2";
+const VERSION = "pantry-v3";
 const SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
 
@@ -26,8 +26,6 @@ const SHELL_URLS = [
   "/icon-512.png",
   "/icon.svg",
   "/apple-touch-icon.png",
-  "/fonts/hanken-grotesk.woff2",
-  "/fonts/source-serif-4.woff2",
 ];
 
 self.addEventListener("install", (event) => {

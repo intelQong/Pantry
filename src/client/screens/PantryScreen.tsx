@@ -113,9 +113,9 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
             on top of whatever row was last on screen. */}
         <button
           onClick={() => setShowAdd(true)}
-          className="px-3.5 py-2 rounded-xl bg-accent-500 text-text-on-accent text-xs font-semibold hover:bg-accent-600 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm shrink-0"
+          className="-mr-2 px-2 text-accent-text text-[1rem] font-normal active:opacity-50 transition-opacity flex items-center gap-1 shrink-0"
         >
-          <Icon name="plus" className="w-3.5 h-3.5" strokeWidth={2.5} />
+          <Icon name="plus" className="w-5 h-5" strokeWidth={2.2} />
           <span>Add item</span>
         </button>
       </header>
@@ -128,7 +128,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
 
       {/* Search */}
       <div className="px-4 mb-4">
-        <div className="flex items-center gap-2 bg-surface-sunken rounded-xl border border-border px-3 py-2 focus-within:border-accent-400 transition-all">
+        <div className="flex items-center gap-2 bg-surface-sunken rounded-xl px-3 py-2 focus-within:border-accent-400 transition-all">
           <Icon name="search" className="w-4 h-4 text-text-tertiary shrink-0" />
           <input
             type="text"
