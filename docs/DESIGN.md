@@ -47,6 +47,20 @@ tick in Shop Mode
 
 There is no separate consumption-logging step, because that is a chore people abandon.
 
+## Money: one grocery bill a month, bills kept apart
+
+Everything that isn't a utility is groceries, including spend logged without a name
+("General expense"). A month's groceries form one bill that is settled the following
+month, like a credit-card statement: October's shopping is paid in November. That
+bill is the number the household plans around.
+
+Utilities (gas, electricity, wifi) are paid up front, when they are bought. Adding
+them in would overstate the bill, so they are kept out of every spend figure: Stats,
+History and the grocery bill. They appear only on the Bills screen, beside the grocery
+bill and never inside it. The split is made in one place on each side: `NOT_A_BILL`
+in `src/worker/routes/insights.ts`, and `groupMonthlyBills` in
+`src/client/lib/utilities.ts`.
+
 ## The restock engine (`src/worker/restock.ts`)
 
 **Status**, where `daysSince = floor((now - reference) / 86400)`:
