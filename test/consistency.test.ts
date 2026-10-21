@@ -144,3 +144,18 @@ describe("insights buckets stay right across a daylight-saving change", () => {
     expect(d.byMonth.map((b) => b.key)).toContain("2026-01");
   });
 });
+
+describe("deleting an item leaves a full record of what went with it", () => {
+  it("snapshots the purchases the cascade removes into the audit entry", async () => {
+    const bought = await (
+      await json("/api/purchases", { itemName: "Cascade Oats", priceTotal: 5000 }, memberCookie)
+    ).json<{ id: string; itemId: string }>();
+    await json(`/api/items/${bought.itemId}`, {}, memberCookie, "DELETE");
+
+    const logs = await (await get("/api/audit-log", memberCookie)).json<AuditLogEntry[]>();
+    const entry = logs.find((l) => l.action === "delete_item" && l.entityId === bought.itemId)!;
+    const details = JSON.parse(entry.details!) as { purchases: Array<{ id: string; price_total: number }> };
+    expect(details.purchases).toEqual([expect.objectContaining({ id: bought.id, price_total: 5000 })]);
+    expect(entry.summary).toBe('Deleted item "Cascade Oats" and its 1 purchase');
+  });
+});

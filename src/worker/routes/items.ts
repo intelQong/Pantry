@@ -371,13 +371,23 @@ items.delete("/items/:id", requireMember, async (c) => {
     return c.json({ error: "not_found", message: "No such item." }, 404);
   }
 
+  // purchase.item_id cascades, so the item's whole buying history goes with
+  // it. The audit row is the only trace left, so it carries that history too.
+  const purchases = await c.env.DB.prepare(
+    `SELECT id, purchased_at, qty, unit, price_total, bought_by, note
+       FROM purchase WHERE item_id = ? AND household_id = ? ORDER BY purchased_at`,
+  )
+    .bind(id, session.householdId)
+    .all();
+  const n = purchases.results.length;
+
   await c.env.DB.batch([
     await auditStatement(c.env.DB, session, {
       action: "delete_item",
       entityType: "item",
       entityId: item.id,
-      summary: `Deleted item "${item.name}"`,
-      details: item,
+      summary: `Deleted item "${item.name}"${n ? ` and its ${n} ${n === 1 ? "purchase" : "purchases"}` : ""}`,
+      details: { ...item, purchases: purchases.results },
     }),
     c.env.DB.prepare("DELETE FROM item WHERE id = ? AND household_id = ?").bind(id, session.householdId),
   ]);
