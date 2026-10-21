@@ -6,6 +6,7 @@ import { parseMoney, toInputValue, formatMoney, CURRENCY_SYMBOL } from "../lib/m
 import { Icon } from "./Icon";
 import { BottomSheet } from "../components/BottomSheet";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "./ConfirmSheet";
 
 export function ItemDetailSheet({
   itemId,
@@ -26,6 +27,7 @@ export function ItemDetailSheet({
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   // Edit form state
   const [name, setName] = useState("");
@@ -100,6 +102,26 @@ export function ItemDetailSheet({
       toast("Failed to delete", "error");
     }
   }, [itemId, item, toast, onClose, onUpdated]);
+
+  const handleDeletePurchase = useCallback(
+    async (purchaseId: string) => {
+      const ok = await confirm({
+        title: "Delete this purchase?",
+        message: "It will no longer count toward spending or restock timing.",
+        action: "Delete Purchase",
+      });
+      if (!ok) return;
+      try {
+        await api.deletePurchase(purchaseId);
+        toast("Purchase record deleted");
+        setPurchases((prev) => prev.filter((p) => p.id !== purchaseId));
+        onUpdated();
+      } catch (err) {
+        toast(err instanceof api.ApiRequestError ? err.body.message : "Failed to delete purchase", "error");
+      }
+    },
+    [toast, onUpdated, confirm],
+  );
 
   return (
     <BottomSheet open={open} onClose={onClose} title={editing ? "Edit Item" : item?.name}>
@@ -338,9 +360,17 @@ export function ItemDetailSheet({
                       </span>
                       {p.priceTotal !== null && (
                         <span className="text-text font-medium">
-                          ৳{(p.priceTotal / 100).toFixed(0)}
+                          {formatMoney(p.priceTotal)}
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePurchase(p.id)}
+                        title="Delete this purchase record"
+                        className="p-1 -mr-1 text-text-tertiary hover:text-danger rounded transition-colors"
+                      >
+                        <Icon name="close" className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}

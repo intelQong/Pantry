@@ -3,22 +3,14 @@ import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
 import { computeStatus, byUrgency } from "../restock";
+import { auditStatement } from "../audit";
+import { isValidPriceTotal as isValidPrice, isValidQty } from "./purchases";
 import type { Item, Category, ItemWithStatus } from "../../shared/types";
 
 const items = new Hono<AppEnv>();
 
 /** How far ahead of due an item starts showing as due_soon, absent a member profile. */
 const DEFAULT_LEAD_DAYS = 2;
-
-/**
- * default_price is minor units (poisha), so it must be a non-negative integer.
- * Rejecting floats here is what keeps 12.5 poisha from ever reaching the
- * database and quietly breaking every total downstream.
- */
-function isValidPrice(value: unknown): value is number | null | undefined {
-  if (value === undefined || value === null) return true;
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
-}
 
 interface ItemRow {
   id: string;
@@ -59,8 +51,11 @@ function toItem(row: ItemRow): Item {
 }
 
 function toItemWithStatus(row: ItemRow, leadDays: number, now: number, onList: boolean): ItemWithStatus {
-  const { status, daysSince, daysUntilDue } = computeStatus(row, leadDays, now);
-  return { ...toItem(row), status, daysSince, daysUntilDue, onList };
+  const { status, daysSince, daysUntilDue, neverPurchased } = computeStatus(row, leadDays, now);
+  // The engine counts a never-bought item from created_at so it can still go
+  // due; the API says null, as ItemWithStatus documents, so no screen tells
+  // someone they paid a bill "0d ago" that was never paid.
+  return { ...toItem(row), status, daysSince: neverPurchased ? null : daysSince, daysUntilDue, onList };
 }
 
 // A correlated subquery rather than a join, so every query that selects these
@@ -90,7 +85,7 @@ async function leadDaysFor(db: D1Database, memberId: string | null): Promise<num
   return settings?.lead_days ?? DEFAULT_LEAD_DAYS;
 }
 
-/** All non-archived items for the household, with live restock status attached. */
+/** All items for the household, with live restock status attached. */
 items.get("/items", requireSession, async (c) => {
   const session = c.get("session");
   const now = nowSeconds();
@@ -264,10 +259,7 @@ items.patch("/items/:id", requireSession, async (c) => {
   // A zero or negative interval makes computeStatus report the item overdue on
   // every read forever, and a null default_qty hits a NOT NULL constraint as an
   // unhandled 500.
-  if (
-    body.defaultQty !== undefined &&
-    (typeof body.defaultQty !== "number" || !Number.isFinite(body.defaultQty) || body.defaultQty <= 0)
-  ) {
+  if (!isValidQty(body.defaultQty)) {
     return c.json({ error: "invalid_qty", message: "Default quantity must be a positive number." }, 400);
   }
   if (
@@ -348,20 +340,47 @@ items.patch("/items/:id", requireSession, async (c) => {
   return c.json(toItem(row!));
 });
 
-/** Soft delete only -- purchase history references item_id and must survive. */
-items.delete("/items/:id", requireSession, async (c) => {
+/** Outright delete -- cascades to list entries and purchases as confirmed in UI. */
+items.delete("/items/:id", requireMember, async (c) => {
   const session = c.get("session");
   const id = c.req.param("id");
 
-  const result = await c.env.DB.prepare(
-    "DELETE FROM item WHERE id = ? AND household_id = ?",
+  const item = await c.env.DB.prepare(
+    `SELECT i.id, i.name, i.category_id, i.unit, i.default_qty, i.brand, i.notes,
+            i.is_staple, i.default_price, i.restock_interval_days, c.name AS category_name
+       FROM item i
+       LEFT JOIN category c ON c.id = i.category_id
+      WHERE i.id = ? AND i.household_id = ?`,
   )
     .bind(id, session.householdId)
-    .run();
+    .first<{
+      id: string;
+      name: string;
+      category_id: string | null;
+      unit: string;
+      default_qty: number;
+      brand: string | null;
+      notes: string | null;
+      is_staple: number;
+      default_price: number | null;
+      restock_interval_days: number;
+      category_name: string | null;
+    }>();
 
-  if (result.meta.changes === 0) {
+  if (!item) {
     return c.json({ error: "not_found", message: "No such item." }, 404);
   }
+
+  await c.env.DB.batch([
+    await auditStatement(c.env.DB, session, {
+      action: "delete_item",
+      entityType: "item",
+      entityId: item.id,
+      summary: `Deleted item "${item.name}"`,
+      details: item,
+    }),
+    c.env.DB.prepare("DELETE FROM item WHERE id = ? AND household_id = ?").bind(id, session.householdId),
+  ]);
 
   return c.json({ ok: true });
 });

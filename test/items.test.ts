@@ -203,6 +203,42 @@ describe("purchase history", () => {
       (await json("/api/purchases", { itemId: item.id, priceTotal: -5 }, memberCookie)).status,
     ).toBe(400);
   });
+
+  it("POST /api/purchases creates a new item when given itemName without itemId", async () => {
+    const res = await json(
+      "/api/purchases",
+      { itemName: "Fresh Mango", qty: 3, unit: "kg", priceTotal: 45000, note: "sweet" },
+      memberCookie,
+    );
+    expect(res.status).toBe(201);
+    const purchase = await res.json<{ itemId: string; qty: number; priceTotal: number }>();
+    expect(purchase.qty).toBe(3);
+    expect(purchase.priceTotal).toBe(45000);
+
+    // Verify item was created and linked
+    const itemRow = await env.DB.prepare("SELECT name, unit FROM item WHERE id = ?")
+      .bind(purchase.itemId)
+      .first<{ name: string; unit: string }>();
+    expect(itemRow?.name).toBe("Fresh Mango");
+    expect(itemRow?.unit).toBe("kg");
+  });
+
+  it("POST /api/purchases records a purchase even when no item is specified (defaults to General expense)", async () => {
+    const res = await json(
+      "/api/purchases",
+      { priceTotal: 12000, note: "Street snack" },
+      memberCookie,
+    );
+    expect(res.status).toBe(201);
+    const purchase = await res.json<{ itemId: string; priceTotal: number }>();
+    expect(purchase.priceTotal).toBe(12000);
+
+    const itemRow = await env.DB.prepare("SELECT name, is_staple FROM item WHERE id = ?")
+      .bind(purchase.itemId)
+      .first<{ name: string; is_staple: number }>();
+    expect(itemRow?.name).toBe("General expense");
+    expect(itemRow?.is_staple).toBe(0);
+  });
 });
 
 describe("cross-household isolation", () => {

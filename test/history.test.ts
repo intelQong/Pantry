@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dateInputToEpochSeconds, groupByDay } from "../src/client/lib/utilities";
+import { dateInputToEpochSeconds, groupByDay, groupByWeek, groupByMonth } from "../src/client/lib/utilities";
 
 interface TestPurchase {
   id: string;
@@ -85,5 +85,52 @@ describe("groupByDay", () => {
     const todayKey = "2026-08-05";
     const groups = groupByDay([], todayKey);
     expect(groups).toEqual([]);
+  });
+});
+
+describe("groupByWeek", () => {
+  it("groups purchases occurring in the same Monday-to-Sunday week", () => {
+    // 2026-08-05 is Wednesday. Monday is 2026-08-03.
+    // 2026-08-07 is Friday (same week).
+    // 2026-08-10 is next Monday.
+    const todayKey = "2026-08-05";
+    const groups = groupByWeek(
+      [
+        purchase("w1", dateInputToEpochSeconds("2026-08-05"), 1500),
+        purchase("w2", dateInputToEpochSeconds("2026-08-07"), 2500),
+        purchase("w3", dateInputToEpochSeconds("2026-08-10"), 4000),
+      ],
+      todayKey,
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.key).toBe("2026-08-10");
+    expect(groups[0]!.total).toBe(4000);
+    expect(groups[1]!.key).toBe("2026-08-03");
+    expect(groups[1]!.total).toBe(4000);
+    expect(groups[1]!.label).toBe("This week");
+  });
+
+  it("labels last week as 'Last week'", () => {
+    const todayKey = "2026-08-10"; // Monday
+    const groups = groupByWeek(
+      [purchase("prev", dateInputToEpochSeconds("2026-08-05"), 1000)],
+      todayKey,
+    );
+    expect(groups[0]!.label).toBe("Last week");
+  });
+});
+
+describe("groupByMonth", () => {
+  it("groups purchases by month, newest first", () => {
+    const groups = groupByMonth([
+      purchase("m1", dateInputToEpochSeconds("2026-07-15"), 1000),
+      purchase("m2", dateInputToEpochSeconds("2026-08-01"), 2000),
+      purchase("m3", dateInputToEpochSeconds("2026-08-15"), 3000),
+    ]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.key).toBe("2026-08");
+    expect(groups[0]!.total).toBe(5000);
+    expect(groups[1]!.key).toBe("2026-07");
+    expect(groups[1]!.total).toBe(1000);
   });
 });

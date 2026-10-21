@@ -1,11 +1,13 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import type { PurchaseWithItem } from "@shared/types";
 import * as api from "../api";
 import { BottomSheet } from "./BottomSheet";
 import { Icon } from "./Icon";
 import { useToast } from "./Toast";
+import { useConfirm } from "./ConfirmSheet";
 import { parseQty } from "../lib/numbers";
 import { parseMoney, formatMoney, toInputValue, allocateTotal, CURRENCY_SYMBOL } from "../lib/money";
+import { findHistoryDuplicate, epochSecondsToDateInput, type HistoryDuplicateMatch } from "../lib/utilities";
 
 /**
  * Correcting one shop after the fact.
@@ -22,17 +24,27 @@ import { parseMoney, formatMoney, toInputValue, allocateTotal, CURRENCY_SYMBOL }
  */
 export function PurchaseDaySheet({
   label,
-  purchases,
+  purchases: initialPurchases,
+  allPurchases,
+  dateKey,
   open,
   onClose,
   onSaved,
 }: {
   label: string;
   purchases: PurchaseWithItem[];
+  allPurchases?: PurchaseWithItem[];
+  dateKey?: string;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [purchases, setPurchases] = useState<PurchaseWithItem[]>(initialPurchases);
+
+  useEffect(() => {
+    setPurchases(initialPurchases);
+  }, [initialPurchases]);
+
   const recorded = useMemo(
     () =>
       Object.fromEntries(
@@ -46,7 +58,14 @@ export function PurchaseDaySheet({
   const [prices, setPrices] = useState<Record<string, string>>(recorded);
   const [qtys, setQtys] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<HistoryDuplicateMatch<PurchaseWithItem> | null>(null);
   const { toast } = useToast();
+  const confirm = useConfirm();
+
+  // Clear duplicate warning whenever prices or total change
+  useEffect(() => {
+    setDuplicateWarning(null);
+  }, [total, prices]);
 
   const ids = purchases.map((p) => p.id);
 
@@ -73,38 +92,96 @@ export function PurchaseDaySheet({
 
   const unpinnedCount = ids.filter((id) => pinned[id] === undefined).length;
 
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      const updates = purchases.map((p) => {
-        const qtyText = qtys[p.id];
-        const price = allocated[p.id];
-        // Emptying a field that had a price is a deliberate "I don't know
-        // what this cost", so it clears the record rather than being ignored.
-        // A row that was blank and stayed blank sends nothing, so opening this
-        // sheet and closing it still cannot wipe anything.
-        const cleared =
-          prices[p.id] !== undefined && prices[p.id]!.trim() === "" && p.priceTotal !== null;
+  const handleSave = useCallback(
+    async (confirmedDuplicate = false, excludeId?: string) => {
+      // Find all purchases on this date (from allPurchases or local purchases)
+      const dateItems = (
+        allPurchases && dateKey
+          ? allPurchases.filter((p) => epochSecondsToDateInput(p.purchasedAt) === dateKey)
+          : purchases
+      ).filter((p) => p.id !== excludeId);
 
-        return {
-          id: p.id,
-          ...(qtyText !== undefined && qtyText.trim() !== ""
-            ? { qty: parseQty(qtyText, p.qty) }
-            : {}),
-          ...(cleared ? { priceTotal: null } : price !== undefined ? { priceTotal: price } : {}),
-        };
+      if (!confirmedDuplicate) {
+        const dupe = findHistoryDuplicate(dateItems, allocated, billTotal);
+        if (dupe) {
+          setDuplicateWarning(dupe);
+          return;
+        }
+      }
+
+      setSaving(true);
+      try {
+        const updates = purchases
+          .filter((p) => p.id !== excludeId)
+          .map((p) => {
+            const qtyText = qtys[p.id];
+            const price = allocated[p.id];
+            // Emptying a field that had a price is a deliberate "I don't know
+            // what this cost", so it clears the record rather than being ignored.
+            // A row that was blank and stayed blank sends nothing, so opening this
+            // sheet and closing it still cannot wipe anything.
+            const cleared =
+              prices[p.id] !== undefined && prices[p.id]!.trim() === "" && p.priceTotal !== null;
+
+            return {
+              id: p.id,
+              ...(qtyText !== undefined && qtyText.trim() !== ""
+                ? { qty: parseQty(qtyText, p.qty) }
+                : {}),
+              ...(cleared ? { priceTotal: null } : price !== undefined ? { priceTotal: price } : {}),
+            };
+          });
+
+        if (updates.length > 0) {
+          await api.updatePurchases(updates);
+        }
+        toast(excludeId ? "Removed duplicate and updated shop" : "Shop updated");
+        onClose();
+        onSaved();
+      } catch (err) {
+        toast(err instanceof api.ApiRequestError ? err.body.message : "Couldn't save", "error");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [purchases, allPurchases, dateKey, allocated, billTotal, qtys, prices, toast, onClose, onSaved],
+  );
+
+  const handleDeleteAndSave = useCallback(
+    async (duplicateId: string) => {
+      setSaving(true);
+      try {
+        await api.deletePurchase(duplicateId);
+        await handleSave(true, duplicateId);
+      } catch (err) {
+        toast(err instanceof api.ApiRequestError ? err.body.message : "Couldn't remove duplicate", "error");
+        setSaving(false);
+      }
+    },
+    [handleSave, toast],
+  );
+
+  const handleDeleteRow = useCallback(
+    async (p: PurchaseWithItem) => {
+      const ok = await confirm({
+        title: `Remove ${p.itemName} from this shop?`,
+        action: "Remove",
       });
-
-      await api.updatePurchases(updates);
-      toast("Shop updated");
-      onClose();
-      onSaved();
-    } catch (err) {
-      toast(err instanceof api.ApiRequestError ? err.body.message : "Couldn't save", "error");
-    } finally {
-      setSaving(false);
-    }
-  }, [purchases, qtys, prices, allocated, toast, onClose, onSaved]);
+      if (!ok) return;
+      setSaving(true);
+      try {
+        await api.deletePurchase(p.id);
+        toast(`Removed ${p.itemName}`);
+        setPurchases((prev) => prev.filter((item) => item.id !== p.id));
+        onSaved();
+      } catch (err) {
+        toast(err instanceof api.ApiRequestError ? err.body.message : "Couldn't delete item", "error");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [toast, onSaved, confirm],
+  );
 
   return (
     <BottomSheet open={open} onClose={onClose} title={label}>
@@ -150,6 +227,15 @@ export function PurchaseDaySheet({
               const share = allocated[p.id];
               return (
                 <li key={p.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteRow(p)}
+                    title={`Delete ${p.itemName}`}
+                    className="p-1 -ml-1 text-text-tertiary hover:text-status-due transition-colors rounded shrink-0"
+                  >
+                    <Icon name="close" className="w-3.5 h-3.5" />
+                  </button>
+
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm text-text truncate">{p.itemName}</span>
                     {!isPinned && share !== undefined && (
@@ -187,17 +273,71 @@ export function PurchaseDaySheet({
           </ul>
         </div>
 
-        {/* Blocked while the pins exceed the bill, because allocateTotal gives
-            every unpinned row zero in that case -- and a saved ৳0 is
-            indistinguishable from something that was genuinely free. The
-            banner above already says what is wrong. */}
-        <button
-          onClick={handleSave}
-          disabled={saving || overshoot}
-          className="w-full py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold disabled:opacity-50"
-        >
-          {saving ? "Saving…" : overshoot ? "Total is too low" : "Save this shop"}
-        </button>
+        {/* Submit or Duplicate Warning Prompt ---------------------- */}
+        {duplicateWarning ? (
+          <div className="p-4 rounded-xl bg-status-due-bg/90 border border-status-due-border space-y-3 animate-in fade-in duration-200">
+            <div className="flex items-start gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-status-due/20 text-status-due flex items-center justify-center shrink-0 mt-0.5">
+                <Icon name="alert" className="w-4 h-4" strokeWidth={2.5} />
+              </span>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-text">Possible duplicate entry</p>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  There has already been an entry on this date with the same amount (
+                  <strong className="text-text font-semibold">{formatMoney(duplicateWarning.amount)}</strong>
+                  {duplicateWarning.matchedPurchase.itemName ? (
+                    <> for <strong className="text-text font-semibold">{duplicateWarning.matchedPurchase.itemName}</strong></>
+                  ) : null}
+                  ).
+                  <br />
+                  Is this a duplicate entry, or did you make another purchase for this amount?
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWarning(null)}
+                  className="min-h-11 px-3 rounded-xl border border-border-subtle bg-surface hover:bg-surface-sunken text-xs font-medium text-text-secondary hover:text-text transition-colors"
+                >
+                  Cancel (edit)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSave(true)}
+                  disabled={saving}
+                  className="min-h-11 px-3 rounded-xl bg-surface-sunken border border-border text-text hover:bg-surface text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save anyway"}
+                </button>
+              </div>
+
+              {duplicateWarning.matchedPurchase && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteAndSave(duplicateWarning.matchedPurchase.id)}
+                  disabled={saving}
+                  className="w-full min-h-11 px-3 rounded-xl bg-accent-500 hover:bg-accent-600 text-text-on-accent text-xs font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Icon name="close" className="w-3.5 h-3.5" />
+                  <span>
+                    Remove duplicate "{duplicateWarning.matchedPurchase.itemName}" and save
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => handleSave(false)}
+            disabled={saving || overshoot}
+            className="w-full py-2.5 rounded-xl bg-accent-500 text-text-on-accent text-sm font-semibold disabled:opacity-50"
+          >
+            {saving ? "Saving…" : overshoot ? "Total is too low" : "Save this shop"}
+          </button>
+        )}
       </div>
     </BottomSheet>
   );

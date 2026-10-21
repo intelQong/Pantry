@@ -41,7 +41,7 @@ export async function runDigestSweep(env: Env, nowSecondsValue: number): Promise
 
     if (isQuietHour(hour, member.quiet_start, member.quiet_end)) continue;
 
-    // Non-archived staples that need attention, excluding anything already
+    // Staples that need attention, excluding anything already
     // sitting on the pending shop list -- nagging about something already
     // handled would just teach everyone to ignore the notification.
     const candidates = await env.DB.prepare(

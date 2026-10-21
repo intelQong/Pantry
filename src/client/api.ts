@@ -8,6 +8,7 @@ import type {
   PurchaseWithItem,
   ApiError,
   InsightsResponse,
+  AuditLogEntry,
 } from "@shared/types";
 
 /* ------------------------------------------------------------------ */
@@ -186,8 +187,9 @@ export const buyListEntry = (id: string, data?: { qty?: number; priceTotal?: num
 /* ------------------------------------------------------------------ */
 
 export const addPurchase = (data: {
-  itemId: string;
-  /** Epoch seconds. The server clamps it: never future, never >30 days back. */
+  itemId?: string;
+  itemName?: string;
+  /** Epoch seconds. Clamped to never future, never >30 days back. */
   purchasedAt?: number;
   qty?: number;
   unit?: string;
@@ -198,8 +200,11 @@ export const addPurchase = (data: {
 export const getItemPurchases = (itemId: string) =>
   request<Purchase[]>("GET", `/items/${itemId}/purchases`);
 
-/** Everything the household has bought, newest first. Utilities excluded. */
-export const getPurchases = () => request<PurchaseWithItem[]>("GET", "/purchases");
+/** Everything the household has bought, newest first. Pass { all: true } to include utilities. */
+export const getPurchases = (options?: { all?: boolean }) => {
+  const query = options?.all ? "?all=1" : "";
+  return request<PurchaseWithItem[]>("GET", `/purchases${query}`);
+};
 
 /**
  * Corrects quantities and prices on purchases already logged.
@@ -210,6 +215,9 @@ export const getPurchases = () => request<PurchaseWithItem[]>("GET", "/purchases
 export const updatePurchases = (
   updates: Array<{ id: string; qty?: number; priceTotal?: number | null }>,
 ) => request<{ ok: true; updated: number }>("PATCH", "/purchases", { updates });
+
+export const deletePurchase = (id: string) =>
+  request<{ ok: true }>("DELETE", `/purchases/${id}`);
 
 /* ------------------------------------------------------------------ */
 /* Push                                                                */
@@ -225,5 +233,14 @@ export const subscribePush = (subscription: {
 
 export const testPush = () =>
   request<{ ok: true; sent: number; failed: number }>("POST", "/push/test");
+
+/* ------------------------------------------------------------------ */
+/* Audit Log                                                           */
+/* ------------------------------------------------------------------ */
+
+export const getAuditLog = (limit?: number) => {
+  const query = limit ? `?limit=${limit}` : "";
+  return request<AuditLogEntry[]>("GET", `/audit-log${query}`);
+};
 
 export { ApiRequestError };

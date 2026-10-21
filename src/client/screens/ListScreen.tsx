@@ -293,9 +293,9 @@ export function ListScreen({
   if (uncategorised?.length) grouped.push({ cat: null, entries: uncategorised });
 
   return (
-    <div className="safe-top">
+    <div>
       <header className="px-5 pt-6 pb-2">
-        <h1 className="screen-title">Shop List</h1>
+        <h1 className="screen-title">Shopping List</h1>
         <p className="text-sm text-text-secondary mt-0.5">
           {allEntries.length} item{allEntries.length !== 1 ? "s" : ""} to buy
         </p>
@@ -372,7 +372,7 @@ export function ListScreen({
         />
       ) : (
         <>
-          <div className="px-4 space-y-4 pb-4">
+          <div className="px-4 space-y-4 pb-28">
             {grouped.map(({ cat, entries: groupEntries }) => (
               <section key={cat?.id ?? "none"}>
                 <h3 className="flex items-center gap-2 eyebrow px-1 mb-2">

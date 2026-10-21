@@ -71,6 +71,7 @@ describe("insights with no purchases", () => {
     expect(d.topItems).toEqual([]);
     expect(d.byMonth).toEqual([]);
     expect(d.byWeek).toEqual([]);
+    expect(d.byDay).toEqual([]);
   });
 
   it("requires a session", async () => {
@@ -139,16 +140,20 @@ describe("insights with history", () => {
 
     expect(d.byWeek.length).toBeGreaterThan(1);
     expect(d.byMonth.length).toBeGreaterThan(0);
+    expect(d.byDay.length).toBeGreaterThan(0);
 
-    // Weeks are keyed to a Monday; months to 'YYYY-MM'.
+    // Weeks are keyed to a Monday; months to 'YYYY-MM'; days to 'YYYY-MM-DD'.
     expect(d.byWeek[0]!.key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(d.byMonth[0]!.key).toMatch(/^\d{4}-\d{2}$/);
+    expect(d.byDay[0]!.key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(d.byWeek[0]!.label).toMatch(/^\d{1,2} \w{3}$/);
     expect(d.byMonth[0]!.label).toMatch(/^\w{3}$/);
+    expect(d.byDay[0]!.label).toMatch(/^\d{1,2} \w{3}$/);
 
-    // Both cadences must account for the same money.
+    // All cadences must account for the same money when within limits.
     expect(d.byWeek.reduce((s, b) => s + b.spend, 0)).toBe(d.totalSpend);
     expect(d.byMonth.reduce((s, b) => s + b.spend, 0)).toBe(d.totalSpend);
+    expect(d.byDay.reduce((s, b) => s + b.spend, 0)).toBe(d.totalSpend);
   });
 
   it("every weekly bucket starts on a Monday", async () => {

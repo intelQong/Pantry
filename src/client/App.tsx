@@ -5,6 +5,7 @@ import type { SessionResponse } from "./api";
 import { useRouter } from "./hooks/useRouter";
 import { readSnapshot, writeSnapshot, isOffline } from "./lib/cache";
 import { ToastProvider } from "./components/Toast";
+import { ConfirmProvider } from "./components/ConfirmSheet";
 import { OutboxProvider } from "./components/Outbox";
 import { SyncBanner } from "./components/SyncBanner";
 import { Shell } from "./components/Shell";
@@ -114,6 +115,7 @@ export function App() {
 
   return (
     <ToastProvider>
+      <ConfirmProvider>
       {state.phase === "loading" && (
         <div className="min-h-dvh flex items-center justify-center bg-surface">
           <LoadingSpinner size="lg" />
@@ -145,9 +147,9 @@ export function App() {
           )}
           {route.page === "list" && <ListScreen categories={categories} navigate={navigate} />}
           {route.page === "shop" && <ShopModeScreen categories={categories} navigate={navigate} />}
-          {route.page === "pantry" && <PantryScreen categories={categories} />}
+          {route.page === "inventory" && <PantryScreen categories={categories} />}
           {route.page === "utilities" && <UtilitiesScreen categories={categories} />}
-          {route.page === "insights" && <InsightsScreen categories={categories} navigate={navigate} />}
+          {route.page === "stats" && <InsightsScreen categories={categories} navigate={navigate} />}
           {route.page === "history" && <HistoryScreen categories={categories} navigate={navigate} />}
           {route.page === "settings" && (
             <SettingsScreen
@@ -155,11 +157,13 @@ export function App() {
               members={state.members}
               householdName={state.householdName}
               onRefresh={boot}
+              navigate={navigate}
             />
           )}
         </Shell>
         </OutboxProvider>
       )}
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

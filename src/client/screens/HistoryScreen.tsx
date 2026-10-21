@@ -55,7 +55,7 @@ export function HistoryScreen({
 
   if (failure) {
     return (
-      <div className="safe-top">
+      <div>
         <Header count={null} total={0} navigate={navigate} />
         <LoadFailed offline={failure === "offline"} onRetry={load} />
       </div>
@@ -66,7 +66,7 @@ export function HistoryScreen({
 
   if (purchases.length === 0) {
     return (
-      <div className="safe-top">
+      <div>
         <Header count={0} total={0} navigate={navigate} />
         <EmptyState
           icon="clock"
@@ -78,7 +78,7 @@ export function HistoryScreen({
   }
 
   return (
-    <div className="safe-top pb-6">
+    <div className="pb-6">
       <Header count={purchases.length} total={total} navigate={navigate} />
 
       <div className="px-4 space-y-3">
@@ -146,6 +146,8 @@ export function HistoryScreen({
         <PurchaseDaySheet
           label={days.find((d) => d.key === editingDay)?.label ?? "This shop"}
           purchases={days.find((d) => d.key === editingDay)?.purchases ?? []}
+          allPurchases={purchases}
+          dateKey={editingDay}
           open
           onClose={() => setEditingDay(null)}
           onSaved={load}
@@ -167,11 +169,11 @@ function Header({
   return (
     <header className="px-5 pt-6 pb-4">
       <button
-        onClick={() => navigate("insights")}
-        className="flex items-center gap-1 -ml-1 mb-1 text-xs font-medium text-text-tertiary hover:text-text-secondary transition-colors"
+        onClick={() => navigate("stats")}
+        className="flex items-center gap-1 -ml-1 mb-1 text-base font-medium text-accent-text transition-colors"
       >
         <Icon name="chevron" className="w-3.5 h-3.5 rotate-180" strokeWidth={2} />
-        Insights
+        Stats
       </button>
       <h1 className="screen-title">History</h1>
       {count !== null && count > 0 && (

@@ -3,12 +3,22 @@ import {
   dateInputToEpochSeconds,
   epochSecondsToDateInput,
   groupByMonth,
+  getNextMonthLabel,
+  getMonthName,
+  groupMonthlyBills,
+  findDuplicatePurchases,
+  findHistoryDuplicate,
 } from "../src/client/lib/utilities";
 import type { Purchase } from "../src/shared/types";
 
-const purchase = (id: string, purchasedAt: number, priceTotal: number | null): Purchase => ({
+const purchase = (
+  id: string,
+  purchasedAt: number,
+  priceTotal: number | null,
+  itemId = "item-1",
+): Purchase => ({
   id,
-  itemId: "item-1",
+  itemId,
   purchasedAt,
   qty: 1,
   unit: "cylinder",
@@ -64,3 +74,170 @@ describe("groupByMonth", () => {
     expect(groupByMonth([])).toEqual([]);
   });
 });
+
+describe("getNextMonthLabel and getMonthName", () => {
+  it("returns next month label across standard months and year rollover", () => {
+    expect(getNextMonthLabel("2026-09")).toContain("October");
+    expect(getNextMonthLabel("2026-12")).toContain("January");
+    expect(getNextMonthLabel("2026-12")).toContain("2027");
+  });
+
+  it("returns current month name", () => {
+    expect(getMonthName("2026-09")).toBe("September");
+    expect(getMonthName("2026-01")).toBe("January");
+  });
+});
+
+describe("groupMonthlyBills", () => {
+  it("separates grocery purchases from utility purchases and calculates their totals", () => {
+    const utilityIds = new Set(["gas-id", "wifi-id"]);
+    const currentMonth = "2026-09";
+
+    const purchases = [
+      // September: 1 grocery (৳200), 1 utility (৳500), 1 unpriced grocery
+      purchase("sep-g1", dateInputToEpochSeconds("2026-09-10"), 20000, "rice-id"),
+      purchase("sep-g2", dateInputToEpochSeconds("2026-09-12"), null, "salt-id"),
+      purchase("sep-u1", dateInputToEpochSeconds("2026-09-15"), 50000, "wifi-id"),
+      // August: 2 groceries (৳100, ৳300), 1 utility (৳1000)
+      purchase("aug-g1", dateInputToEpochSeconds("2026-08-01"), 10000, "flour-id"),
+      purchase("aug-g2", dateInputToEpochSeconds("2026-08-05"), 30000, "oil-id"),
+      purchase("aug-u1", dateInputToEpochSeconds("2026-08-20"), 100000, "gas-id"),
+    ];
+
+    const bills = groupMonthlyBills(purchases, utilityIds, currentMonth);
+
+    expect(bills).toHaveLength(2);
+    // Newest month first
+    expect(bills[0]!.key).toBe("2026-09");
+    expect(bills[0]!.groceryTotal).toBe(20000); // ৳200
+    expect(bills[0]!.groceryPurchases).toHaveLength(2);
+    expect(bills[0]!.utilityTotal).toBe(50000); // ৳500
+    expect(bills[0]!.utilityPurchases).toHaveLength(1);
+    expect(bills[0]!.totalSpend).toBe(70000); // ৳700
+    expect(bills[0]!.nextMonthLabel).toContain("October");
+
+    // August
+    expect(bills[1]!.key).toBe("2026-08");
+    expect(bills[1]!.groceryTotal).toBe(40000); // ৳400 (bill to be paid in September)
+    expect(bills[1]!.utilityTotal).toBe(100000); // ৳1000
+    expect(bills[1]!.totalSpend).toBe(140000);
+    expect(bills[1]!.nextMonthLabel).toContain("September");
+  });
+
+  it("always includes current month even if no purchases exist yet", () => {
+    const utilityIds = new Set(["gas-id"]);
+    const currentMonth = "2026-10";
+    const bills = groupMonthlyBills([], utilityIds, currentMonth);
+
+    expect(bills).toHaveLength(1);
+    expect(bills[0]!.key).toBe("2026-10");
+    expect(bills[0]!.groceryTotal).toBe(0);
+    expect(bills[0]!.utilityTotal).toBe(0);
+    expect(bills[0]!.nextMonthLabel).toContain("November");
+  });
+});
+
+describe("findDuplicatePurchases", () => {
+  it("finds purchases on the same date with the exact same price", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-30"), 25000),
+      purchase("p2", dateInputToEpochSeconds("2026-09-30"), 10000),
+      purchase("p3", dateInputToEpochSeconds("2026-09-29"), 25000),
+    ];
+
+    const dupes = findDuplicatePurchases(list, "2026-09-30", 25000);
+    expect(dupes.map((d) => d.id)).toEqual(["p1"]);
+  });
+
+  it("returns multiple matches if multiple purchases match date and amount", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-30"), 15000),
+      purchase("p2", dateInputToEpochSeconds("2026-09-30"), 15000),
+      purchase("p3", dateInputToEpochSeconds("2026-09-30"), 30000),
+    ];
+
+    const dupes = findDuplicatePurchases(list, "2026-09-30", 15000);
+    expect(dupes.map((d) => d.id)).toEqual(["p1", "p2"]);
+  });
+
+  it("returns empty array when amounts or dates differ", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-30"), 25000),
+    ];
+
+    expect(findDuplicatePurchases(list, "2026-09-29", 25000)).toEqual([]);
+    expect(findDuplicatePurchases(list, "2026-09-30", 26000)).toEqual([]);
+    expect(findDuplicatePurchases(list, "2026-09-30", 0)).toEqual([]);
+  });
+
+  it("handles empty purchases list", () => {
+    expect(findDuplicatePurchases([], "2026-09-30", 25000)).toEqual([]);
+  });
+});
+
+describe("findHistoryDuplicate", () => {
+  it("detects when billTotal matches an existing recorded purchase on that date", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p2", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p3-manual", dateInputToEpochSeconds("2026-09-29"), 50000), // manual entry ৳500
+    ];
+
+    const match = findHistoryDuplicate(list, {}, 50000);
+    expect(match).not.toBeNull();
+    expect(match?.matchedPurchase.id).toBe("p3-manual");
+    expect(match?.amount).toBe(50000);
+    expect(match?.reason).toBe("bill_total");
+  });
+
+  it("detects when an individual item's newly allocated price matches an existing recorded purchase", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p2", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p3-manual", dateInputToEpochSeconds("2026-09-29"), 30000), // ৳300
+    ];
+
+    const match = findHistoryDuplicate(list, { p1: 30000 }, null);
+    expect(match).not.toBeNull();
+    expect(match?.matchedPurchase.id).toBe("p3-manual");
+    expect(match?.amount).toBe(30000);
+    expect(match?.reason).toBe("item_price");
+  });
+
+  it("detects when the sum of newly priced items matches an existing recorded purchase", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p2", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p3-manual", dateInputToEpochSeconds("2026-09-29"), 50000), // ৳500
+    ];
+
+    const match = findHistoryDuplicate(list, { p1: 20000, p2: 30000 }, null);
+    expect(match).not.toBeNull();
+    expect(match?.matchedPurchase.id).toBe("p3-manual");
+    expect(match?.amount).toBe(50000);
+    expect(match?.reason).toBe("sum_total");
+  });
+
+  it("does not flag duplicate if an item's price has not changed", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-29"), 25000),
+      purchase("p2", dateInputToEpochSeconds("2026-09-29"), 10000),
+    ];
+
+    // User re-saves without changing p1's price
+    const match = findHistoryDuplicate(list, { p1: 25000 }, null);
+    expect(match).toBeNull();
+  });
+
+  it("returns null when no prices match", () => {
+    const list = [
+      purchase("p1", dateInputToEpochSeconds("2026-09-29"), null),
+      purchase("p2", dateInputToEpochSeconds("2026-09-29"), 10000),
+    ];
+
+    expect(findHistoryDuplicate(list, { p1: 15000 }, 15000)).toBeNull();
+    expect(findHistoryDuplicate(list, {}, null)).toBeNull();
+  });
+});
+
+

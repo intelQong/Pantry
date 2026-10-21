@@ -3,6 +3,9 @@ import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
 import { relearnInterval } from "../restock";
+import { auditStatement } from "../audit";
+// Pure and dependency-free, so the audit summary shows money exactly as the app does.
+import { formatMoney } from "../../client/lib/money";
 import type { Purchase } from "../../shared/types";
 
 const purchases = new Hono<AppEnv>();
@@ -32,7 +35,7 @@ function toPurchase(row: PurchaseRow): Purchase {
 }
 
 /** price_total is minor units (poisha): must be absent, or a non-negative integer. */
-function isValidPriceTotal(value: unknown): value is number | null | undefined {
+export function isValidPriceTotal(value: unknown): value is number | null | undefined {
   if (value === undefined || value === null) return true;
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
@@ -73,6 +76,19 @@ function isValidPurchasedAt(value: unknown): value is number | undefined {
 function resolvePurchasedAt(value: number | undefined, now: number): number {
   if (value === undefined) return now;
   return Math.min(now, Math.max(now - BACKDATE_WINDOW_SECONDS, value));
+}
+
+/**
+ * The item a typed name refers to, case-insensitively -- the same rule the shop
+ * list merges by, so "rice" typed on the list and "Rice" in the pantry are one
+ * item, not a twin that splits the purchase history and the learned interval.
+ */
+async function findItemByName(db: D1Database, householdId: string, name: string): Promise<string | null> {
+  const row = await db
+    .prepare("SELECT id FROM item WHERE household_id = ? AND LOWER(name) = LOWER(?) ORDER BY rowid LIMIT 1")
+    .bind(householdId, name)
+    .first<{ id: string }>();
+  return row?.id ?? null;
 }
 
 purchases.post("/list/:id/bought", requireMember, async (c) => {
@@ -146,19 +162,20 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
   // list_entry within the same batch so the purchase rows reference it.
   let itemIdForPurchase = entry.item_id;
   if (!itemIdForPurchase && entry.custom_name) {
-    const newItemId = crypto.randomUUID();
-    try {
-      await c.env.DB.prepare(
-        `INSERT INTO item (id, household_id, name, created_by, created_at, last_purchased_at)
-         VALUES (?,?,?,?,?,?)`,
-      ).bind(newItemId, session.householdId, entry.custom_name, session.memberId, now, purchasedAt).run();
-      itemIdForPurchase = newItemId;
-    } catch (err) {
-      const existing = await c.env.DB.prepare(
-        "SELECT id FROM item WHERE household_id = ? AND name = ? AND archived = 0",
-      ).bind(session.householdId, entry.custom_name).first<{ id: string }>();
-      if (!existing) throw err;
-      itemIdForPurchase = existing.id;
+    itemIdForPurchase = await findItemByName(c.env.DB, session.householdId, entry.custom_name);
+    if (!itemIdForPurchase) {
+      const newItemId = crypto.randomUUID();
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO item (id, household_id, name, created_by, created_at, last_purchased_at)
+           VALUES (?,?,?,?,?,?)`,
+        ).bind(newItemId, session.householdId, entry.custom_name, session.memberId, now, purchasedAt).run();
+        itemIdForPurchase = newItemId;
+      } catch (err) {
+        // Lost a race with another add of the same name; use the winner's row.
+        itemIdForPurchase = await findItemByName(c.env.DB, session.householdId, entry.custom_name);
+        if (!itemIdForPurchase) throw err;
+      }
     }
 
     statements.push(
@@ -243,6 +260,7 @@ purchases.post("/purchases", requireMember, async (c) => {
   const session = c.get("session");
   const body = await c.req.json<{
     itemId?: string;
+    itemName?: string;
     qty?: number;
     unit?: string;
     priceTotal?: number | null;
@@ -250,9 +268,8 @@ purchases.post("/purchases", requireMember, async (c) => {
     purchasedAt?: number;
   }>();
 
-  if (!body.itemId) {
-    return c.json({ error: "missing_item", message: "itemId is required." }, 400);
-  }
+  // Validated before anything is written: an item created for a purchase that
+  // then gets rejected would sit in the pantry with no history, nagging.
   if (!isValidPriceTotal(body.priceTotal)) {
     return c.json(
       { error: "invalid_price", message: "priceTotal must be a non-negative whole number of minor units." },
@@ -269,18 +286,45 @@ purchases.post("/purchases", requireMember, async (c) => {
     );
   }
 
+  const now = nowSeconds();
+  const purchasedAt = resolvePurchasedAt(body.purchasedAt, now);
+
+  let itemId = body.itemId;
+  if (!itemId) {
+    const typedName = typeof body.itemName === "string" ? body.itemName.trim() : "";
+    const rawName = typedName || "General expense";
+    itemId = (await findItemByName(c.env.DB, session.householdId, rawName)) ?? undefined;
+    if (!itemId) {
+      itemId = crypto.randomUUID();
+      await c.env.DB.prepare(
+        `INSERT INTO item (id, household_id, name, is_staple, unit, created_by, created_at, last_purchased_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          itemId,
+          session.householdId,
+          rawName,
+          // A named thing is worth tracking; the catch-all bucket is not.
+          typedName ? 1 : 0,
+          body.unit?.trim() || "pcs",
+          session.memberId,
+          now,
+          purchasedAt,
+        )
+        .run();
+    }
+  }
+
   const item = await c.env.DB.prepare(
     "SELECT unit, default_qty FROM item WHERE id = ? AND household_id = ?",
   )
-    .bind(body.itemId, session.householdId)
+    .bind(itemId, session.householdId)
     .first<{ unit: string; default_qty: number }>();
 
   if (!item) {
     return c.json({ error: "unknown_item", message: "That item doesn't exist." }, 400);
   }
 
-  const now = nowSeconds();
-  const purchasedAt = resolvePurchasedAt(body.purchasedAt, now);
   const id = crypto.randomUUID();
   const qty = body.qty ?? item.default_qty;
   const unit = body.unit?.trim() || item.unit;
@@ -289,21 +333,21 @@ purchases.post("/purchases", requireMember, async (c) => {
     c.env.DB.prepare(
       `INSERT INTO purchase (id, household_id, item_id, purchased_at, qty, unit, price_total, bought_by, note)
        VALUES (?,?,?,?,?,?,?,?,?)`,
-    ).bind(id, session.householdId, body.itemId, purchasedAt, qty, unit, body.priceTotal ?? null, session.memberId, body.note ?? null),
+    ).bind(id, session.householdId, itemId, purchasedAt, qty, unit, body.priceTotal ?? null, session.memberId, body.note ?? null),
     // MAX for the same reason as in /list/:id/bought above.
     c.env.DB.prepare(
       "UPDATE item SET last_purchased_at = MAX(COALESCE(last_purchased_at, 0), ?) WHERE id = ? AND household_id = ?",
-    ).bind(purchasedAt, body.itemId, session.householdId),
+    ).bind(purchasedAt, itemId, session.householdId),
   ]);
 
   // Runs after the batch above, same reasoning as in POST /list/:id/bought.
-  await relearnInterval(c.env.DB, body.itemId, session.householdId);
+  await relearnInterval(c.env.DB, itemId, session.householdId);
 
   const row = await c.env.DB.prepare(
     `SELECT id, item_id, purchased_at, qty, unit, price_total, bought_by, note
-       FROM purchase WHERE id = ?`,
+       FROM purchase WHERE id = ? AND household_id = ?`,
   )
-    .bind(id)
+    .bind(id, session.householdId)
     .first<PurchaseRow>();
 
   return c.json(toPurchase(row!), 201);
@@ -344,10 +388,7 @@ purchases.patch("/purchases", requireMember, async (c) => {
         400,
       );
     }
-    if (
-      update.qty !== undefined &&
-      (typeof update.qty !== "number" || !Number.isFinite(update.qty) || update.qty <= 0)
-    ) {
+    if (!isValidQty(update.qty)) {
       return c.json({ error: "invalid_qty", message: "qty must be a positive number." }, 400);
     }
 
@@ -392,6 +433,7 @@ purchases.patch("/purchases", requireMember, async (c) => {
  */
 purchases.get("/purchases", requireSession, async (c) => {
   const session = c.get("session");
+  const includeAll = c.req.query("all") === "1" || c.req.query("all") === "true";
 
   const rows = await c.env.DB.prepare(
     `SELECT p.id, p.item_id, p.purchased_at, p.qty, p.unit, p.price_total, p.bought_by, p.note,
@@ -399,7 +441,7 @@ purchases.get("/purchases", requireSession, async (c) => {
        FROM purchase p
        JOIN item i ON i.id = p.item_id
        LEFT JOIN category cat ON cat.id = i.category_id
-      WHERE p.household_id = ? AND COALESCE(cat.name, '') != 'Utilities'
+      WHERE p.household_id = ? ${includeAll ? "" : "AND COALESCE(cat.name, '') != 'Utilities'"}
       ORDER BY p.purchased_at DESC, p.rowid DESC
       LIMIT 500`,
   )
@@ -431,6 +473,62 @@ purchases.get("/items/:id/purchases", requireSession, async (c) => {
     .all<PurchaseRow>();
 
   return c.json(rows.results.map(toPurchase));
+});
+
+purchases.delete("/purchases/:id", requireMember, async (c) => {
+  const session = c.get("session");
+  const id = c.req.param("id");
+
+  const purchaseRow = await c.env.DB.prepare(
+    `SELECT p.id, p.item_id, p.purchased_at, p.qty, p.unit, p.price_total, p.bought_by, p.note,
+            i.name AS item_name
+       FROM purchase p
+       JOIN item i ON i.id = p.item_id
+      WHERE p.id = ? AND p.household_id = ?`,
+  )
+    .bind(id, session.householdId)
+    .first<{
+      id: string;
+      item_id: string;
+      purchased_at: number;
+      qty: number;
+      unit: string;
+      price_total: number | null;
+      bought_by: string;
+      note: string | null;
+      item_name: string;
+    }>();
+
+  if (!purchaseRow) {
+    return c.json({ error: "not_found", message: "Purchase not found." }, 404);
+  }
+
+  const priceText = purchaseRow.price_total !== null ? ` (${formatMoney(purchaseRow.price_total)})` : "";
+
+  await c.env.DB.batch([
+    await auditStatement(c.env.DB, session, {
+      action: "delete_purchase",
+      entityType: "purchase",
+      entityId: purchaseRow.id,
+      summary: `Deleted purchase of ${purchaseRow.item_name}${priceText}`,
+      details: {
+        id: purchaseRow.id,
+        itemId: purchaseRow.item_id,
+        itemName: purchaseRow.item_name,
+        purchasedAt: purchaseRow.purchased_at,
+        qty: purchaseRow.qty,
+        unit: purchaseRow.unit,
+        priceTotal: purchaseRow.price_total,
+        boughtBy: purchaseRow.bought_by,
+        note: purchaseRow.note,
+      },
+    }),
+    c.env.DB.prepare("DELETE FROM purchase WHERE id = ? AND household_id = ?").bind(id, session.householdId),
+  ]);
+
+  await relearnInterval(c.env.DB, purchaseRow.item_id, session.householdId);
+
+  return c.json({ ok: true });
 });
 
 export default purchases;

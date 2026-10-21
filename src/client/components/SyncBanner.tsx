@@ -23,7 +23,7 @@ export function SyncBanner() {
       : `${pending} waiting to sync`;
 
   return (
-    <div className="sticky top-0 z-40 safe-top">
+    <div className="sync-banner sticky top-0 z-40 safe-top">
       <div
         className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold tracking-wide ${
           online ? "bg-accent-500 text-text-on-accent" : "bg-text text-surface"

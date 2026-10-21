@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession } from "../middleware";
-import { medianGapDays } from "../restock";
+import { medianGapDays, localParts } from "../restock";
 import type {
   InsightsResponse,
   ItemUsage,
@@ -26,7 +26,44 @@ function weekLabel(key: string): string {
   return `${Number(key.slice(8, 10))} ${MONTHS[month - 1] ?? ""}`.trim();
 }
 
+/** '2026-07-21' -> '21 Jul'. */
+function dayLabel(key: string): string {
+  const month = Number(key.slice(5, 7));
+  const day = Number(key.slice(8, 10));
+  return `${day} ${MONTHS[month - 1] ?? ""}`.trim();
+}
+
 const DAY = 86_400;
+
+interface Bucket {
+  key: string;
+  spend: number;
+  purchases: number;
+}
+
+/** The Monday starting the week of a 'YYYY-MM-DD' date. Weeks run Monday-to-Sunday. */
+function weekStart(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Sums day buckets into coarser ones keyed by `keyOf`. */
+function rollUp(days: Bucket[], keyOf: (date: string) => string): Bucket[] {
+  const out = new Map<string, Bucket>();
+  for (const d of days) {
+    const key = keyOf(d.key);
+    const b = out.get(key) ?? { key, spend: 0, purchases: 0 };
+    b.spend += d.spend;
+    b.purchases += d.purchases;
+    out.set(key, b);
+  }
+  return [...out.values()];
+}
+
+/** The `limit` most recent buckets, newest first -- what the chart shows. */
+const newest = (buckets: Bucket[], limit: number) =>
+  [...buckets].sort((a, b) => b.key.localeCompare(a.key)).slice(0, limit);
 
 interface UsageRow {
   item_id: string;
@@ -54,11 +91,20 @@ interface UsageRow {
  * gets slow.
  */
 insights.get("/insights", requireSession, async (c) => {
-  const { householdId } = c.get("session");
+  const { householdId, memberId } = c.get("session");
   const now = nowSeconds();
   const since30 = now - 30 * DAY;
 
-  const [totals, recent, usage, byCategory, byMonth, byWeek] = await Promise.all([
+  // Buckets follow the viewer's own calendar, as History's do (it groups in the
+  // phone's local time). UTC buckets put a 2am Dhaka shop on the day before.
+  const settings = memberId
+    ? await c.env.DB.prepare("SELECT timezone FROM member_settings WHERE member_id = ?")
+        .bind(memberId)
+        .first<{ timezone: string }>()
+    : null;
+  const timeZone = settings?.timezone ?? "Asia/Dhaka";
+
+  const [totals, recent, usage, byCategory, blocks] = await Promise.all([
     c.env.DB.prepare(
       `SELECT COUNT(*) AS n,
               COUNT(price_total) AS priced,
@@ -114,31 +160,36 @@ insights.get("/insights", requireSession, async (c) => {
         purchases: number;
       }>(),
 
-    // strftime on a unix timestamp needs the 'unixepoch' modifier; without it
-    // SQLite reads the integer as a Julian day and every month comes back wrong.
+    // SQLite has no timezone database, and one offset for the whole history
+    // is wrong for every purchase on the far side of a daylight-saving change.
+    // So SQL only collapses purchases into 15-minute blocks -- every real UTC
+    // offset is a multiple of 15 minutes, so no block straddles a local
+    // midnight -- and each block's local date is worked out with Intl below.
+    // A household shops a handful of times a week, so this stays a few
+    // hundred rows however much history piles up.
     c.env.DB.prepare(
-      `SELECT strftime('%Y-%m', purchased_at, 'unixepoch') AS bucket,
+      `SELECT (purchased_at / 900) * 900 AS block,
               COALESCE(SUM(price_total), 0) AS spend,
               COUNT(*) AS purchases
          FROM purchase WHERE household_id = ?
-        GROUP BY bucket ORDER BY bucket DESC LIMIT 12`,
+        GROUP BY block`,
     )
       .bind(householdId)
-      .all<{ bucket: string; spend: number; purchases: number }>(),
-
-    // Weeks run Monday-to-Sunday. '-6 days' then 'weekday 1' lands on this
-    // week's Monday for every day including Monday itself, which a bare
-    // 'weekday 1' would push a week backwards.
-    c.env.DB.prepare(
-      `SELECT date(purchased_at, 'unixepoch', '-6 days', 'weekday 1') AS bucket,
-              COALESCE(SUM(price_total), 0) AS spend,
-              COUNT(*) AS purchases
-         FROM purchase WHERE household_id = ?
-        GROUP BY bucket ORDER BY bucket DESC LIMIT 12`,
-    )
-      .bind(householdId)
-      .all<{ bucket: string; spend: number; purchases: number }>(),
+      .all<{ block: number; spend: number; purchases: number }>(),
   ]);
+
+  const byDayMap = new Map<string, { spend: number; purchases: number }>();
+  for (const b of blocks.results) {
+    const { date } = localParts(b.block, timeZone);
+    const bucket = byDayMap.get(date) ?? { spend: 0, purchases: 0 };
+    bucket.spend += b.spend;
+    bucket.purchases += b.purchases;
+    byDayMap.set(date, bucket);
+  }
+  const days = [...byDayMap].map(([key, v]) => ({ key, ...v }));
+  const byDay = newest(days, 30);
+  const byWeek = newest(rollUp(days, weekStart), 12);
+  const byMonth = newest(rollUp(days, (d) => d.slice(0, 7)), 12);
 
   // Per-item rhythm needs the individual timestamps, which the GROUP BY above
   // has already collapsed. One extra query for the items actually being shown.
@@ -208,22 +259,9 @@ insights.get("/insights", requireSession, async (c) => {
         purchases: r.purchases,
       }),
     ),
-    byMonth: byMonth.results.map(
-      (r): SpendBucket => ({
-        key: r.bucket,
-        label: monthLabel(r.bucket),
-        spend: r.spend,
-        purchases: r.purchases,
-      }),
-    ),
-    byWeek: byWeek.results.map(
-      (r): SpendBucket => ({
-        key: r.bucket,
-        label: weekLabel(r.bucket),
-        spend: r.spend,
-        purchases: r.purchases,
-      }),
-    ),
+    byMonth: byMonth.map((r): SpendBucket => ({ ...r, label: monthLabel(r.key) })),
+    byWeek: byWeek.map((r): SpendBucket => ({ ...r, label: weekLabel(r.key) })),
+    byDay: byDay.map((r): SpendBucket => ({ ...r, label: dayLabel(r.key) })),
     topItems,
   };
 

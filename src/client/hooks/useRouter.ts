@@ -1,23 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 
-export type Route =
-  | { page: "today" }
-  | { page: "list" }
-  | { page: "shop" }
-  | { page: "pantry" }
-  | { page: "utilities" }
-  | { page: "insights" }
-  | { page: "history" }
-  | { page: "settings" };
+/** One name per screen. The aliases in parseHash only keep old links working. */
+export type Route = {
+  page: "today" | "inventory" | "list" | "stats" | "settings" | "shop" | "history" | "utilities";
+};
 
 function parseHash(hash: string): Route {
   const h = hash.replace(/^#\/?/, "");
   switch (h) {
+    case "add":
     case "list":      return { page: "list" };
+    case "inventory":
+    case "pantry":    return { page: "inventory" };
+    case "stats":
+    case "insights":  return { page: "stats" };
     case "shop":      return { page: "shop" };
-    case "pantry":    return { page: "pantry" };
+    case "bills":
     case "utilities": return { page: "utilities" };
-    case "insights":  return { page: "insights" };
     case "history":   return { page: "history" };
     case "settings":  return { page: "settings" };
     default:          return { page: "today" };

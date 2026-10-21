@@ -182,5 +182,24 @@ export interface InsightsResponse {
   byCategory: CategorySpend[];
   byMonth: SpendBucket[];
   byWeek: SpendBucket[];
+  byDay: SpendBucket[];
   topItems: ItemUsage[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* Audit Log                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export interface AuditLogEntry {
+  id: string;
+  householdId: string;
+  memberId: string | null;
+  memberName: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  summary: string;
+  details: string | null;
+  createdAt: number;
+}
+

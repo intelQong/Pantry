@@ -317,8 +317,8 @@ auth.post("/profile/passcode", requireMember, async (c) => {
   const next = passcode?.trim();
 
   if (!next) {
-    await c.env.DB.prepare("UPDATE member SET admin_passcode_hash = NULL WHERE id = ?")
-      .bind(session.memberId)
+    await c.env.DB.prepare("UPDATE member SET admin_passcode_hash = NULL WHERE id = ? AND household_id = ?")
+      .bind(session.memberId, session.householdId)
       .run();
     return c.json({ ok: true, hasAdminPasscode: false });
   }
@@ -330,8 +330,8 @@ auth.post("/profile/passcode", requireMember, async (c) => {
     );
   }
 
-  await c.env.DB.prepare("UPDATE member SET admin_passcode_hash = ? WHERE id = ?")
-    .bind(await hashPasscode(next), session.memberId)
+  await c.env.DB.prepare("UPDATE member SET admin_passcode_hash = ? WHERE id = ? AND household_id = ?")
+    .bind(await hashPasscode(next), session.memberId, session.householdId)
     .run();
 
   return c.json({ ok: true, hasAdminPasscode: true });

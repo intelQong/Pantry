@@ -23,8 +23,14 @@ export function Shell({
 
   return (
     <div className="flex flex-col min-h-dvh bg-surface">
-      {/* Content area, pad for bottom nav */}
-      <main className="flex-1 pb-20">{children}</main>
+      {/* The notch and the tab bar are cleared here, once, so no screen can
+          forget either: the tab bar is 3.25rem plus the home-indicator inset. */}
+      <main
+        className="flex-1 safe-top"
+        style={{ paddingBottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }}
+      >
+        {children}
+      </main>
       <BottomNav current={route.page} onNavigate={handleNav} />
     </div>
   );

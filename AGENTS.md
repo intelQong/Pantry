@@ -67,7 +67,8 @@ src/worker/
   restock.ts               The engine: status, median learning, timezone helpers
   push.ts                  Web Push delivery + dead-subscription pruning
   cron.ts                  Hourly digest sweep
-  routes/                  auth.ts, items.ts, list.ts, purchases.ts
+  audit.ts                 auditStatement(): the one audit_log writer
+  routes/                  auth.ts, items.ts, list.ts, purchases.ts, insights.ts, push.ts, audit.ts
 test/                      One file per area; each gets an isolated D1
 ```
 
@@ -83,7 +84,12 @@ test/                      One file per area; each gets an isolated D1
 - SQL columns are `snake_case`; API JSON is `camelCase`. Route files own the mapping
   (see `toListEntry`, `toPurchase`).
 - Errors are always `c.json({ error: "snake_case_code", message: "Human sentence." }, status)`.
-- Items are **soft-deleted** (`archived = 1`) so purchase history outlives them.
+- Items are **hard-deleted** (since 0005; the `archived` column is vestigial and always 0).
+  Deleting cascades to purchases; `audit_log` keeps a JSON snapshot of what went.
+- Destructive routes sit behind `requireMember` and write their audit row via
+  `auditStatement` (`src/worker/audit.ts`) in the same batch as the DELETE.
+- Validators live once: `isValidQty` / `isValidPriceTotal` in `routes/purchases.ts`.
+- Item names match **case-insensitively** wherever a typed name is resolved to an item.
 
 ---
 

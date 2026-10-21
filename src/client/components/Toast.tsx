@@ -30,11 +30,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext value={{ toast }}>
       {children}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div
+        className="fixed left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none w-max max-w-[calc(100vw-2rem)]"
+        style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom, 0px))" }}
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`animate-slide-up px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium whitespace-nowrap ${
+            className={`animate-slide-up px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-center ${
               t.type === "error"
                 ? "bg-danger text-white"
                 : t.type === "info"

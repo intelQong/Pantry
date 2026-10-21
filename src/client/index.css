@@ -322,6 +322,10 @@ body::before {
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .safe-top    { padding-top: env(safe-area-inset-top, 0px); }
 
+/* While the sync banner is up it is the thing under the notch, so the screen
+   below it must not clear the notch a second time. */
+body:has(.sync-banner) .safe-top:not(.sync-banner) { padding-top: 0; }
+
 /* ------------------------------------------------------------------ */
 /* Utilities                                                           */
 /* ------------------------------------------------------------------ */

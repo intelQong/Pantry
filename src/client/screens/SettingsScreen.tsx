@@ -6,23 +6,27 @@ import { useToast } from "../components/Toast";
 import { usePushSubscription } from "../hooks/usePushSubscription";
 import { Icon } from "../components/Icon";
 import { Avatar } from "../components/Avatar";
+import { AuditLogSheet } from "../components/AuditLogSheet";
 
 export function SettingsScreen({
   currentMemberId,
   members,
   householdName,
   onRefresh,
+  navigate,
 }: {
   currentMemberId: string | null;
   members: Member[];
   householdName: string;
   onRefresh: () => void;
+  navigate?: (path: string) => void;
 }) {
   const [theme, setTheme] = useState<"system" | "light" | "dark">(() => {
     if (document.documentElement.classList.contains("dark")) return "dark";
     if (document.documentElement.classList.contains("light")) return "light";
     return "system";
   });
+  const [auditLogOpen, setAuditLogOpen] = useState(false);
   const { toast } = useToast();
   const { state: pushState, error: pushError, subscribe } = usePushSubscription();
   const [busy, setBusy] = useState(false);
@@ -128,10 +132,20 @@ export function SettingsScreen({
   }, [onRefresh]);
 
   return (
-    <div className="safe-top">
-      <header className="px-5 pt-6 pb-4">
-        <h1 className="screen-title">Settings</h1>
-        <p className="text-sm text-text-secondary mt-0.5">{householdName}</p>
+    <div>
+      <header className="px-5 pt-6 pb-4 flex items-center justify-between">
+        <div>
+          <h1 className="screen-title">Settings</h1>
+          <p className="text-sm text-text-secondary mt-0.5">{householdName}</p>
+        </div>
+        {navigate && (
+          <button
+            onClick={() => navigate("today")}
+            className="px-3.5 py-1.5 rounded-xl bg-surface-sunken border border-border-subtle text-xs font-semibold text-text hover:bg-surface-raised active:scale-95 transition-all"
+          >
+            Done
+          </button>
+        )}
       </header>
 
       <div className="px-4 space-y-4 pb-8">
@@ -364,6 +378,32 @@ export function SettingsScreen({
           )}
         </section>
 
+        {/* Activity & System Log */}
+        <section className="card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="eyebrow">Activity & System Log</h3>
+              <p className="text-xs text-text-tertiary mt-0.5">
+                Undeletable audit trail of record deletions and system events.
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[0.6875rem] font-bold bg-accent-500/15 text-accent-text border border-accent-400/30">
+              Immutable
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAuditLogOpen(true)}
+            className="w-full mt-2 py-2.5 px-3 rounded-xl bg-surface-sunken hover:bg-border/60 text-sm font-medium text-text flex items-center justify-between transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="shield" className="w-4 h-4 text-accent-text" />
+              <span>View System Log</span>
+            </div>
+            <Icon name="chevron" className="w-4 h-4 text-text-tertiary" />
+          </button>
+        </section>
+
         {/* Coming soon */}
         <section className="card p-4">
           <h3 className="eyebrow mb-2">
@@ -386,6 +426,12 @@ export function SettingsScreen({
           Pantry v0.1.0
         </p>
       </div>
+
+      <AuditLogSheet
+        open={auditLogOpen}
+        onClose={() => setAuditLogOpen(false)}
+        members={members}
+      />
     </div>
   );
 }

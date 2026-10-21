@@ -74,18 +74,79 @@ export function groupByDay<T extends { purchasedAt: number; priceTotal: number |
     }));
 }
 
-export interface PurchaseMonth {
+export interface PurchaseWeek<T = Purchase> {
+  /** 'YYYY-MM-DD' of the Monday of this week, used as React key and for sorting. */
+  key: string;
+  /** Human heading: 'This week', 'Last week', or 'Week of 21 Jul'. */
+  label: string;
+  /** Sum of priceTotal in minor units; unpriced entries contribute nothing. */
+  total: number;
+  purchases: T[];
+}
+
+export function groupByWeek<T extends { purchasedAt: number; priceTotal: number | null }>(
+  purchases: T[],
+  todayKey: string = epochSecondsToDateInput(Date.now() / 1000),
+): PurchaseWeek<T>[] {
+  const [ty, tm, td] = todayKey.split("-").map(Number);
+  const todayDt = new Date(ty!, tm! - 1, td!);
+  const todayDiff = (todayDt.getDay() + 6) % 7;
+  const thisMondayDt = new Date(ty!, tm! - 1, td! - todayDiff);
+  const thisMondayKey = epochSecondsToDateInput(Math.floor(thisMondayDt.getTime() / 1000));
+  const lastMondayDt = new Date(ty!, tm! - 1, td! - todayDiff - 7);
+  const lastMondayKey = epochSecondsToDateInput(Math.floor(lastMondayDt.getTime() / 1000));
+
+  const weeks = new Map<string, T[]>();
+  for (const p of purchases) {
+    const dateStr = epochSecondsToDateInput(p.purchasedAt);
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const dt = new Date(y!, m! - 1, d!);
+    const diffToMonday = (dt.getDay() + 6) % 7;
+    const mondayDt = new Date(y!, m! - 1, d! - diffToMonday);
+    const mondayKey = epochSecondsToDateInput(Math.floor(mondayDt.getTime() / 1000));
+
+    const bucket = weeks.get(mondayKey);
+    if (bucket) bucket.push(p);
+    else weeks.set(mondayKey, [p]);
+  }
+
+  return [...weeks.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, list]) => {
+      const mDate = new Date(dateInputToEpochSeconds(key) * 1000);
+      const label =
+        key === thisMondayKey
+          ? "This week"
+          : key === lastMondayKey
+            ? "Last week"
+            : `Week of ${mDate.toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "short",
+                ...(key.slice(0, 4) === todayKey.slice(0, 4) ? {} : { year: "numeric" }),
+              })}`;
+      return {
+        key,
+        label,
+        total: list.reduce((sum, p) => sum + (p.priceTotal ?? 0), 0),
+        purchases: [...list].sort((a, b) => b.purchasedAt - a.purchasedAt),
+      };
+    });
+}
+
+export interface PurchaseMonth<T = Purchase> {
   /** 'YYYY-MM', used as the React key and for sorting. */
   key: string;
   /** Human heading, e.g. 'July 2026'. */
   label: string;
   /** Sum of priceTotal in minor units; unpriced entries contribute nothing. */
   total: number;
-  purchases: Purchase[];
+  purchases: T[];
 }
 
-export function groupByMonth(purchases: Purchase[]): PurchaseMonth[] {
-  const months = new Map<string, Purchase[]>();
+export function groupByMonth<T extends { purchasedAt: number; priceTotal: number | null }>(
+  purchases: T[],
+): PurchaseMonth<T>[] {
+  const months = new Map<string, T[]>();
 
   for (const p of purchases) {
     const key = epochSecondsToDateInput(p.purchasedAt).slice(0, 7);
@@ -109,3 +170,167 @@ export function groupByMonth(purchases: Purchase[]): PurchaseMonth[] {
       };
     });
 }
+
+/**
+ * Given a 'YYYY-MM' key, returns the human label for the following month,
+ * e.g. '2026-09' -> 'October 2026'.
+ */
+export function getNextMonthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  if (!y || !m) return "Next Month";
+  // m is 1-12. new Date(year, m, 1) creates the month indexed at m (0-indexed), which is the next month.
+  const nextMonthDate = new Date(y, m, 1);
+  return nextMonthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+/**
+ * Given a 'YYYY-MM' key, returns the month name, e.g. '2026-09' -> 'September'.
+ */
+export function getMonthName(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  if (!y || !m) return key;
+  const dt = new Date(y, m - 1, 1);
+  return dt.toLocaleDateString(undefined, { month: "long" });
+}
+
+export interface MonthlyBillBreakdown<T = Purchase> {
+  key: string;
+  label: string;
+  nextMonthLabel: string;
+  groceryTotal: number;
+  groceryPurchases: T[];
+  utilityTotal: number;
+  utilityPurchases: T[];
+  totalSpend: number;
+  allPurchases: T[];
+}
+
+/**
+ * Computes monthly bill breakdowns separating non-utility grocery purchases
+ * (which form the grocery bill to be paid next month) from utility payments.
+ */
+export function groupMonthlyBills<T extends { itemId: string; purchasedAt: number; priceTotal: number | null }>(
+  purchases: T[],
+  utilityItemIds: Set<string>,
+  currentMonthKey: string = epochSecondsToDateInput(Date.now() / 1000).slice(0, 7),
+): MonthlyBillBreakdown<T>[] {
+  const map = new Map<string, T[]>();
+  for (const p of purchases) {
+    const key = epochSecondsToDateInput(p.purchasedAt).slice(0, 7);
+    const list = map.get(key) ?? [];
+    list.push(p);
+    map.set(key, list);
+  }
+
+  // Ensure current month is present even if no purchases yet
+  if (!map.has(currentMonthKey)) {
+    map.set(currentMonthKey, []);
+  }
+
+  const keys = [...map.keys()].sort((a, b) => b.localeCompare(a));
+
+  return keys.map((key) => {
+    const list = map.get(key) ?? [];
+    const groceryPurchases = list.filter((p) => !utilityItemIds.has(p.itemId));
+    const utilityPurchases = list.filter((p) => utilityItemIds.has(p.itemId));
+
+    const groceryTotal = groceryPurchases.reduce((sum, p) => sum + (p.priceTotal ?? 0), 0);
+    const utilityTotal = utilityPurchases.reduce((sum, p) => sum + (p.priceTotal ?? 0), 0);
+
+    const [y, m] = key.split("-").map(Number);
+    const monthDate = new Date(y!, m! - 1, 1);
+    const label = monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const nextMonthLabel = getNextMonthLabel(key);
+
+    return {
+      key,
+      label,
+      nextMonthLabel,
+      groceryTotal,
+      groceryPurchases: [...groceryPurchases].sort((a, b) => b.purchasedAt - a.purchasedAt),
+      utilityTotal,
+      utilityPurchases: [...utilityPurchases].sort((a, b) => b.purchasedAt - a.purchasedAt),
+      totalSpend: groceryTotal + utilityTotal,
+      allPurchases: [...list].sort((a, b) => b.purchasedAt - a.purchasedAt),
+    };
+  });
+}
+
+/**
+ * Detects whether purchases with the same date (YYYY-MM-DD in local time)
+ * and the exact same priceTotal already exist in the given purchases.
+ */
+export function findDuplicatePurchases<T extends { purchasedAt: number; priceTotal: number | null }>(
+  purchases: T[],
+  date: string,
+  price: number,
+): T[] {
+  if (!price || price <= 0) return [];
+  return purchases.filter(
+    (p) => epochSecondsToDateInput(p.purchasedAt) === date && p.priceTotal === price,
+  );
+}
+
+export interface HistoryDuplicateMatch<T> {
+  matchedPurchase: T;
+  amount: number;
+  reason: "item_price" | "bill_total" | "sum_total";
+}
+
+/**
+ * Checks whether newly entered or updated prices on a specific date collide
+ * with an already recorded purchase on that same date.
+ */
+export function findHistoryDuplicate<T extends { id: string; priceTotal: number | null }>(
+  allDatePurchases: T[],
+  newAllocations: Record<string, number | undefined>,
+  billTotal: number | null,
+): HistoryDuplicateMatch<T> | null {
+  // Purchases that were ALREADY recorded with a positive price before this edit session
+  const previouslyPriced = allDatePurchases.filter(
+    (p) => p.priceTotal !== null && p.priceTotal > 0,
+  );
+
+  if (previouslyPriced.length === 0) return null;
+
+  // 1. Check if billTotal matches an existing recorded purchase
+  if (billTotal !== null && billTotal > 0) {
+    const match = previouslyPriced.find((p) => p.priceTotal === billTotal);
+    if (match) {
+      return { matchedPurchase: match, amount: billTotal, reason: "bill_total" };
+    }
+  }
+
+  // 2. Check each newly allocated price against previously recorded purchases
+  let newlyPricedSum = 0;
+  let newlyPricedCount = 0;
+
+  for (const p of allDatePurchases) {
+    const allocatedPrice = newAllocations[p.id];
+    // Only check if price is newly provided or modified
+    if (allocatedPrice !== undefined && allocatedPrice > 0 && allocatedPrice !== p.priceTotal) {
+      newlyPricedSum += allocatedPrice;
+      newlyPricedCount++;
+
+      const match = previouslyPriced.find(
+        (existing) => existing.id !== p.id && existing.priceTotal === allocatedPrice,
+      );
+      if (match) {
+        return { matchedPurchase: match, amount: allocatedPrice, reason: "item_price" };
+      }
+    }
+  }
+
+  // 3. If multiple items are being priced, check if their sum matches an existing recorded purchase
+  if (newlyPricedCount > 1 && newlyPricedSum > 0) {
+    const match = previouslyPriced.find((existing) => existing.priceTotal === newlyPricedSum);
+    if (match) {
+      return { matchedPurchase: match, amount: newlyPricedSum, reason: "sum_total" };
+    }
+  }
+
+  return null;
+}
+
+
+

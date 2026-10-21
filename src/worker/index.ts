@@ -9,6 +9,7 @@ import list from "./routes/list";
 import purchases from "./routes/purchases";
 import insights from "./routes/insights";
 import push from "./routes/push";
+import audit from "./routes/audit";
 
 const app = new Hono<AppEnv>().basePath("/api");
 
@@ -20,6 +21,7 @@ app.route("/", list);
 app.route("/", purchases);
 app.route("/", insights);
 app.route("/", push);
+app.route("/", audit);
 
 app.get("/health", (c) => c.json({ ok: true }));
 

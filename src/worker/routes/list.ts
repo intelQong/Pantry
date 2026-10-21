@@ -3,6 +3,7 @@ import type { AppEnv } from "../env";
 import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
 import { isValidQty } from "./purchases";
+import { auditStatement } from "../audit";
 import type { ListEntry } from "../../shared/types";
 
 const list = new Hono<AppEnv>();
@@ -189,11 +190,12 @@ list.post("/list", requireMember, async (c) => {
    * a retried add is caught by its clientId long before it reaches here.
    */
   const mergeInto = async (target: MergeTarget) => {
-    await c.env.DB.prepare("UPDATE list_entry SET qty = ?, note = ? WHERE id = ?")
+    await c.env.DB.prepare("UPDATE list_entry SET qty = ?, note = ? WHERE id = ? AND household_id = ?")
       .bind(
         body.qty !== undefined ? body.qty : (target.qty ?? 1) + 1,
         body.note !== undefined ? body.note : target.note,
         target.id,
+        session.householdId,
       )
       .run();
     const row = await fetchListEntry(c.env.DB, target.id, session.householdId);
@@ -292,16 +294,42 @@ list.patch("/list/:id", requireSession, async (c) => {
   return c.json(toListEntry(row!));
 });
 
-list.delete("/list/:id", requireSession, async (c) => {
+list.delete("/list/:id", requireMember, async (c) => {
   const session = c.get("session");
   const id = c.req.param("id");
-  const result = await c.env.DB.prepare("DELETE FROM list_entry WHERE id = ? AND household_id = ?")
-    .bind(id, session.householdId)
-    .run();
 
-  if (result.meta.changes === 0) {
+  const entry = await c.env.DB.prepare(
+    `SELECT le.id, le.item_id, le.custom_name, le.qty, le.note,
+            i.name AS item_name
+       FROM list_entry le
+       LEFT JOIN item i ON i.id = le.item_id
+      WHERE le.id = ? AND le.household_id = ?`,
+  )
+    .bind(id, session.householdId)
+    .first<{
+      id: string;
+      item_id: string | null;
+      custom_name: string | null;
+      qty: number | null;
+      note: string | null;
+      item_name: string | null;
+    }>();
+
+  if (!entry) {
     return c.json({ error: "not_found", message: "No such list entry." }, 404);
   }
+
+  await c.env.DB.batch([
+    await auditStatement(c.env.DB, session, {
+      action: "delete_list_entry",
+      entityType: "list_entry",
+      entityId: entry.id,
+      summary: `Removed "${entry.item_name || entry.custom_name || "item"}" from shopping list`,
+      details: entry,
+    }),
+    c.env.DB.prepare("DELETE FROM list_entry WHERE id = ? AND household_id = ?").bind(id, session.householdId),
+  ]);
+
   return c.json({ ok: true });
 });
 

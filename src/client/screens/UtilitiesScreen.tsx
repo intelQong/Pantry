@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { ItemWithStatus, Category, Purchase } from "@shared/types";
+import type { ItemWithStatus, Category, PurchaseWithItem } from "@shared/types";
 import * as api from "../api";
+import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { EmptyState } from "../components/EmptyState";
@@ -10,7 +11,12 @@ import { PriceInput } from "../components/PriceInput";
 import { useToast } from "../components/Toast";
 import { formatMoney } from "../lib/money";
 import { isOffline } from "../lib/cache";
-import { dateInputToEpochSeconds, epochSecondsToDateInput, groupByMonth } from "../lib/utilities";
+import {
+  dateInputToEpochSeconds,
+  epochSecondsToDateInput,
+  getMonthName,
+  groupMonthlyBills,
+} from "../lib/utilities";
 
 /** What the primary button on each card says, keyed by the item's unit. */
 const LOG_LABEL: Record<string, string> = {
@@ -21,10 +27,12 @@ const LOG_LABEL: Record<string, string> = {
 
 export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   const [items, setItems] = useState<ItemWithStatus[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [allPurchases, setAllPurchases] = useState<PurchaseWithItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState<"offline" | "error" | null>(null);
   const [logging, setLogging] = useState<ItemWithStatus | null>(null);
+  const [showCurrentItems, setShowCurrentItems] = useState(false);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const { toast } = useToast();
 
   const category = categories.find((c) => c.name === "Utilities") ?? null;
@@ -32,16 +40,13 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   const fetchAll = useCallback(async () => {
     setFailure(null);
     try {
-      const allItems = await api.getItems();
+      const [allItems, rawPurchases] = await Promise.all([
+        api.getItems(),
+        api.getPurchases({ all: true }).catch(() => []),
+      ]);
       const utilities = allItems.filter((i) => i.isUtility);
       setItems(utilities);
-
-      // Each card's history and the combined log below both need the full
-      // purchase list, so it is fetched once here rather than per card.
-      const histories = await Promise.all(
-        utilities.map((i) => api.getItemPurchases(i.id)),
-      );
-      setPurchases(histories.flat());
+      setAllPurchases(rawPurchases);
     } catch (err) {
       // Every figure here -- status, last-paid, the log -- is a live server
       // computation or a full history list, so there is nothing honest to show
@@ -50,30 +55,46 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
     } finally {
       setLoading(false);
     }
-  }, [category]);
+  }, []);
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const utilityIdSet = useMemo(() => new Set(items.map((i) => i.id)), [items]);
+  const currentMonthKey = useMemo(() => epochSecondsToDateInput(Date.now() / 1000).slice(0, 7), []);
+
   // Newest purchase per item, for the "last amount" line on each card.
   const lastAmountByItem = useMemo(() => {
-    const newest = new Map<string, Purchase>();
-    for (const p of purchases) {
+    const newest = new Map<string, PurchaseWithItem>();
+    for (const p of allPurchases) {
+      if (!utilityIdSet.has(p.itemId)) continue;
       const current = newest.get(p.itemId);
       if (!current || p.purchasedAt > current.purchasedAt) newest.set(p.itemId, p);
     }
     return new Map([...newest].map(([id, p]) => [id, p.priceTotal]));
-  }, [purchases]);
+  }, [allPurchases, utilityIdSet]);
 
-  const months = useMemo(() => groupByMonth(purchases), [purchases]);
+  const monthlyBills = useMemo(
+    () => groupMonthlyBills(allPurchases, utilityIdSet, currentMonthKey),
+    [allPurchases, utilityIdSet, currentMonthKey],
+  );
+
+  const currentMonthBill = useMemo(
+    () => monthlyBills.find((b) => b.key === currentMonthKey) ?? monthlyBills[0] ?? null,
+    [monthlyBills, currentMonthKey],
+  );
+
+  const unpricedCount = useMemo(
+    () => (currentMonthBill ? currentMonthBill.groceryPurchases.filter((p) => p.priceTotal === null).length : 0),
+    [currentMonthBill],
+  );
 
   if (loading) return <LoadingSpinner />;
 
   if (failure) {
     return (
-      <div className="safe-top">
+      <div>
         <header className="px-5 pt-6 pb-2">
           <h1 className="screen-title">Bills</h1>
         </header>
@@ -84,7 +105,7 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
 
   if (!category || items.length === 0) {
     return (
-      <div className="safe-top">
+      <div>
         <header className="px-5 pt-6 pb-2">
           <h1 className="screen-title">Bills</h1>
         </header>
@@ -98,12 +119,101 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   }
 
   return (
-    <div className="safe-top">
+    <div className="pb-6">
       <header className="px-5 pt-6 pb-2">
         <h1 className="screen-title">Bills</h1>
       </header>
 
+      {/* This month's shop bill -- groceries bought on account this month and
+          settled the next. Worded as what it is, so it doesn't read as one of
+          the utility bills listed below it. */}
+      <div className="px-4 pb-3">
+        <section className="card p-5 border border-accent-400/40 bg-gradient-to-br from-surface-raised to-surface shadow-xs">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-accent-50 text-accent-text flex items-center justify-center">
+                <Icon name="basket" className="w-4 h-4" strokeWidth={2} />
+              </span>
+              <h2 className="eyebrow text-accent-text font-semibold">Grocery bill</h2>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-accent-50 text-accent-text whitespace-nowrap">
+              Pay in {currentMonthBill?.nextMonthLabel ?? "next month"}
+            </span>
+          </div>
+
+          <div className="mt-3">
+            <span className="numeral block text-[2.25rem] leading-none font-bold text-text">
+              {formatMoney(currentMonthBill?.groceryTotal ?? 0)}
+            </span>
+            <p className="text-xs text-text-secondary mt-2 flex items-center gap-1.5">
+              <span>
+                Groceries bought in {getMonthName(currentMonthKey)}
+              </span>
+              <span>·</span>
+              <span className="font-semibold text-text">
+                {currentMonthBill?.groceryPurchases.length ?? 0}{" "}
+                {currentMonthBill?.groceryPurchases.length === 1 ? "item" : "items"}
+              </span>
+            </p>
+
+            {unpricedCount > 0 && (
+              <p className="flex items-center gap-1 text-[0.6875rem] text-text-tertiary mt-1.5">
+                <Icon name="tag" className="w-3 h-3 shrink-0" />
+                <span>
+                  {unpricedCount} {unpricedCount === 1 ? "item has" : "items have"} no price recorded yet.
+                </span>
+              </p>
+            )}
+          </div>
+
+          {currentMonthBill && currentMonthBill.groceryPurchases.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-border-subtle">
+              <button
+                onClick={() => setShowCurrentItems((v) => !v)}
+                className="w-full flex items-center justify-between text-xs font-medium text-text-secondary hover:text-text transition-colors py-1"
+              >
+                <span>
+                  {showCurrentItems
+                    ? "Hide items"
+                    : `View ${currentMonthBill.groceryPurchases.length} ${currentMonthBill.groceryPurchases.length === 1 ? "item" : "items"} on this bill`}
+                </span>
+                <Icon
+                  name="chevron"
+                  className={`w-3.5 h-3.5 text-text-tertiary transition-transform ${
+                    showCurrentItems ? "rotate-90" : ""
+                  }`}
+                  strokeWidth={2}
+                />
+              </button>
+
+              {showCurrentItems && (
+                <ul className="mt-2.5 divide-y divide-border-subtle/50 text-xs">
+                  {currentMonthBill.groceryPurchases.map((p) => (
+                    <li key={p.id} className="py-2 flex items-baseline justify-between">
+                      <div className="min-w-0 flex-1 pr-2 truncate">
+                        <span className="font-medium text-text">{p.itemName}</span>
+                        <span className="text-text-tertiary text-[0.6875rem] ml-1.5">
+                          {p.qty} {p.unit} · {epochSecondsToDateInput(p.purchasedAt)}
+                        </span>
+                      </div>
+                      <span className="numeral font-medium text-text shrink-0">
+                        {p.priceTotal !== null ? formatMoney(p.priceTotal) : "Unpriced"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
       <div className="px-4 space-y-3 pb-4">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="eyebrow">Utilities & Subscriptions</h3>
+          <span className="text-xs text-text-tertiary">{items.length} tracked</span>
+        </div>
+
         {items.map((item) => {
           const lastAmount = lastAmountByItem.get(item.id) ?? null;
           return (
@@ -145,36 +255,113 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
         })}
       </div>
 
-      {/* Payment history, grouped by month across all three utilities. */}
-      {months.length > 0 && (
-        <div className="px-4 space-y-4 pb-8">
-          <h3 className="eyebrow px-1">History</h3>
-          {months.map((m) => (
-            <section key={m.key}>
-              <div className="flex items-center justify-between px-1 mb-2">
-                <span className="text-sm font-medium text-text">{m.label}</span>
-                <span className="text-sm text-text-secondary">{formatMoney(m.total)}</span>
-              </div>
-              <div className="space-y-1.5">
-                {m.purchases.map((p) => (
-                  <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 card-row">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-text truncate">
-                        {itemsById.get(p.itemId)?.name ?? "Utility"}
-                      </div>
-                      <div className="text-xs text-text-tertiary truncate">
-                        {epochSecondsToDateInput(p.purchasedAt)}
-                        {p.note ? ` · ${p.note}` : ""}
-                      </div>
+      {/* Monthly History ---------------------------------------------- */}
+      {monthlyBills.length > 0 && (
+        <div className="px-4 space-y-3 pb-24">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="eyebrow">Monthly History</h3>
+            <span className="text-xs text-text-tertiary">Grocery bills & utilities</span>
+          </div>
+
+          {monthlyBills.map((m) => {
+            const isExpanded = expandedMonth === m.key;
+            return (
+              <section key={m.key} className="card overflow-hidden">
+                <button
+                  onClick={() => setExpandedMonth(isExpanded ? null : m.key)}
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-surface-sunken/40 transition-colors"
+                  aria-expanded={isExpanded}
+                >
+                  <div className="min-w-0 flex-1 pr-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-text">{m.label}</span>
+                      {m.key === currentMonthKey && (
+                        <span className="px-1.5 py-0.5 rounded text-[0.6875rem] font-medium bg-accent-50 text-accent-text">
+                          Current
+                        </span>
+                      )}
                     </div>
-                    <span className="text-sm text-text-secondary shrink-0">
-                      {formatMoney(p.priceTotal)}
-                    </span>
+                    <p className="text-xs text-text-tertiary mt-1">
+                      Grocery bill (due {m.nextMonthLabel}):{" "}
+                      <span className="font-semibold text-text-secondary">{formatMoney(m.groceryTotal)}</span>
+                      {" · "}
+                      Utilities:{" "}
+                      <span className="font-semibold text-text-secondary">{formatMoney(m.utilityTotal)}</span>
+                    </p>
                   </div>
-                ))}
-              </div>
-            </section>
-          ))}
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="numeral text-sm font-bold text-text">
+                      {formatMoney(m.totalSpend)}
+                    </span>
+                    <Icon
+                      name="chevron"
+                      className={`w-3.5 h-3.5 text-text-tertiary transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                      strokeWidth={2}
+                    />
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="px-4 pb-4 pt-1 border-t border-border-subtle bg-surface-sunken/30 space-y-3">
+                    {/* Grocery items summary */}
+                    <div>
+                      <h4 className="text-[0.6875rem] font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
+                        Grocery Items ({m.groceryPurchases.length}) · Paid in {m.nextMonthLabel}
+                      </h4>
+                      {m.groceryPurchases.length === 0 ? (
+                        <p className="text-xs text-text-tertiary">No groceries bought in this month.</p>
+                      ) : (
+                        <ul className="divide-y divide-border-subtle/50 text-xs">
+                          {m.groceryPurchases.map((p) => (
+                            <li key={p.id} className="py-1.5 flex items-baseline justify-between">
+                              <div className="min-w-0 flex-1 pr-2 truncate">
+                                <span className="font-medium text-text">{p.itemName}</span>
+                                <span className="text-text-tertiary text-[0.6875rem] ml-1.5">
+                                  {p.qty} {p.unit} · {epochSecondsToDateInput(p.purchasedAt)}
+                                </span>
+                              </div>
+                              <span className="numeral text-text shrink-0">
+                                {p.priceTotal !== null ? formatMoney(p.priceTotal) : "Unpriced"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* Utility payments summary */}
+                    <div className="pt-2 border-t border-border-subtle">
+                      <h4 className="text-[0.6875rem] font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
+                        Utility Payments ({m.utilityPurchases.length})
+                      </h4>
+                      {m.utilityPurchases.length === 0 ? (
+                        <p className="text-xs text-text-tertiary">No utility payments in this month.</p>
+                      ) : (
+                        <ul className="divide-y divide-border-subtle/50 text-xs">
+                          {m.utilityPurchases.map((p) => (
+                            <li key={p.id} className="py-1.5 flex items-baseline justify-between">
+                              <div className="min-w-0 flex-1 pr-2 truncate">
+                                <span className="font-medium text-text">{p.itemName}</span>
+                                {p.note && (
+                                  <span className="text-text-tertiary text-[0.6875rem] ml-1.5">
+                                    · {p.note}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="numeral text-text shrink-0">
+                                {p.priceTotal !== null ? formatMoney(p.priceTotal) : "Unpriced"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
 
@@ -193,7 +380,7 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   );
 }
 
-function LogPaymentSheet({
+export function LogPaymentSheet({
   item,
   onClose,
   onSaved,

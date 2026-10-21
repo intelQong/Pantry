@@ -34,9 +34,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
   const fetchItems = useCallback(async () => {
     setFailed(false);
     try {
-      // Gas, electricity and wifi are items so they can ride the purchase loop,
-      // but the pantry is a grocery browse -- they belong on Bills. Filtered
-      // before the snapshot so the offline copy agrees with the live one.
+      // Bills have their own tab; Item.isUtility exists so this screen stays groceries.
       const fetched = (await api.getItems()).filter((i) => !i.isUtility);
       writeSnapshot("items", fetched);
       setItems(fetched);
@@ -98,18 +96,28 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
     return out;
   }, [items, search, categories]);
 
+
   const matchCount = shelves.reduce((n, s) => n + s.rows.length, 0);
 
   if (loading) return <LoadingSpinner />;
   if (failed) return <LoadFailed offline={false} onRetry={fetchItems} />;
 
   return (
-    <div className="safe-top">
+    <div>
       {/* One clip path for every jar on the screen. */}
       <JarClipDef />
 
-      <header className="px-5 pt-6 pb-3">
-        <h1 className="screen-title">Pantry</h1>
+      <header className="px-5 pt-6 pb-3 flex items-start justify-between gap-3">
+        <h1 className="screen-title">Inventory</h1>
+        {/* In the header, as on Stats, rather than a floating button that sat
+            on top of whatever row was last on screen. */}
+        <button
+          onClick={() => setShowAdd(true)}
+          className="px-3.5 py-2 rounded-xl bg-accent-500 text-text-on-accent text-xs font-semibold hover:bg-accent-600 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm shrink-0"
+        >
+          <Icon name="plus" className="w-3.5 h-3.5" strokeWidth={2.5} />
+          <span>Add item</span>
+        </button>
       </header>
 
       {items.length > 0 && (
@@ -126,7 +134,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search items…"
+            placeholder="Search inventory…"
             className="flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
           />
           {search && (
@@ -154,7 +162,7 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
           }
         />
       ) : (
-        <div className="px-4 pb-4">
+        <div className="px-4">
           {shelves.map(({ cat, rows }) => (
             <section key={cat?.id ?? "none"} className="mb-5">
               <h3 className="flex items-center gap-2 eyebrow px-1 mb-2">
@@ -208,14 +216,6 @@ export function PantryScreen({ categories }: { categories: Category[] }) {
         </div>
       )}
 
-      {/* FAB */}
-      <button
-        onClick={() => setShowAdd(true)}
-        aria-label="Add item"
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-accent-500 text-text-on-accent shadow-lg hover:shadow-xl active:scale-90 transition-all flex items-center justify-center z-30"
-      >
-        <Icon name="plus" className="w-7 h-7" strokeWidth={2} />
-      </button>
 
       {/* Sheets */}
       {selectedId && (

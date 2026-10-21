@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { SELF } from "cloudflare:test";
+import { SELF, env } from "cloudflare:test";
 
 const json = (path: string, body: unknown, cookie?: string, method = "POST") =>
   SELF.fetch(`https://pantry.test${path}`, {
@@ -119,6 +119,12 @@ describe("shopping history", () => {
     expect(riceBuys).toHaveLength(2);
     expect(riceBuys[0]!.priceTotal).toBe(26000); // newest first
     expect(riceBuys[0]!.purchasedAt).toBeGreaterThan(riceBuys[1]!.purchasedAt);
+
+    // With ?all=1, utilities are included (used for spend insights breakdown)
+    const allRes = await get("/api/purchases?all=1", memberCookie);
+    expect(allRes.status).toBe(200);
+    const allHistory = await allRes.json<Array<{ itemName: string }>>();
+    expect(allHistory.map((p) => p.itemName)).toContain("Gas Cylinder");
   });
 
   it("requires a session", async () => {
@@ -206,6 +212,25 @@ describe("correcting a logged shop", () => {
     );
     expect((await res.json<{ updated: number }>()).updated).toBe(0);
     expect(all.length).toBeGreaterThan(0);
+  });
+});
+
+describe("DELETE /api/purchases/:id", () => {
+  it("deletes a purchase and isolates to household", async () => {
+    const rice = await json("/api/items", { name: "Rice to Delete" }, memberCookie);
+    const { id: itemId } = await rice.json<{ id: string }>();
+    const buy = await json("/api/purchases", { itemId, priceTotal: 5000 }, memberCookie);
+    const { id: purchaseId } = await buy.json<{ id: string }>();
+
+    const del = await json(`/api/purchases/${purchaseId}`, {}, memberCookie, "DELETE");
+    expect(del.status).toBe(200);
+
+    const row = await env.DB.prepare("SELECT id FROM purchase WHERE id = ?").bind(purchaseId).first();
+    expect(row).toBeNull();
+
+    // 404 for nonexistent purchase
+    const again = await json(`/api/purchases/${purchaseId}`, {}, memberCookie, "DELETE");
+    expect(again.status).toBe(404);
   });
 });
 

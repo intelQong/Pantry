@@ -33,6 +33,7 @@ export function TodayScreen({
   onNavigate: (path: string) => void;
 }) {
   const [items, setItems] = useState<ItemWithStatus[]>([]);
+  const [dueUtilities, setDueUtilities] = useState<ItemWithStatus[]>([]);
   const [listCount, setListCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -50,10 +51,15 @@ export function TodayScreen({
   const load = useCallback(async () => {
     setFailed(false);
     try {
-      const [today, list] = await Promise.all([api.getToday(), api.getList()]);
+      const [today, list, allItems] = await Promise.all([
+        api.getToday(),
+        api.getList(),
+        api.getItems().catch(() => []),
+      ]);
       writeSnapshot("today", today);
       writeSnapshot("list", list);
       setItems(today);
+      setDueUtilities(allItems.filter((i) => i.isUtility && i.status !== "ok"));
       setListCount(list.length);
       setStale(false);
     } catch (err) {
@@ -116,29 +122,40 @@ export function TodayScreen({
     .filter((g) => g.rows.length > 0);
 
   return (
-    <div className="safe-top pb-6">
+    <div className="pb-6">
       {/* Greeting ------------------------------------------------------- */}
       <header className="px-5 pt-7 pb-6">
-        <p className="eyebrow mb-2">
-          {new Date().toLocaleDateString(undefined, {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })}
-        </p>
-        <h1 className="screen-title">
-          {hello},{" "}
-          <span className="text-accent-text">{memberName}</span>
-        </h1>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="eyebrow mb-2">
+              {new Date().toLocaleDateString(undefined, {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
+            </p>
+            <h1 className="screen-title">
+              {hello},{" "}
+              <span className="text-accent-text">{memberName}</span>
+            </h1>
+          </div>
+          <button
+            onClick={() => onNavigate("settings")}
+            aria-label="Settings"
+            className="w-10 h-10 rounded-full bg-surface-raised border border-border-subtle flex items-center justify-center text-text-secondary hover:text-text hover:border-border active:scale-95 transition-all shadow-sm shrink-0 mt-1"
+          >
+            <Icon name="sliders" className="w-5 h-5" strokeWidth={1.75} />
+          </button>
+        </div>
         <p className="splash mt-2.5">{splash}</p>
       </header>
 
       <div className="px-4 space-y-3">
-        {/* Pantry tally ------------------------------------------------- */}
+        {/* Pantry / Inventory tally ------------------------------------ */}
         <section className="card p-4">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="eyebrow">Pantry</h2>
-            {/* Due dates move with the clock, so a cached pantry goes wrong
+            <h2 className="eyebrow">Inventory</h2>
+            {/* Due dates move with the clock, so a cached inventory goes wrong
                 quietly. Better to say the numbers are old than to show them
                 as though they were checked just now. */}
             <span className="numeral text-sm text-text-secondary">
@@ -150,7 +167,7 @@ export function TodayScreen({
             <p className="text-sm text-text-secondary">
               Nothing tracked yet.{" "}
               <button
-                onClick={() => onNavigate("pantry")}
+                onClick={() => onNavigate("inventory")}
                 className="text-accent-text font-medium underline underline-offset-2"
               >
                 Add your staples
@@ -158,7 +175,7 @@ export function TodayScreen({
               and Pantry starts watching them.
             </p>
           ) : (
-            /* One glance tells you how the pantry sits. Shared with Pantry. */
+            /* One glance tells you how the inventory sits. Shared with Inventory. */
             <StatusStrip items={items} />
           )}
         </section>
@@ -181,6 +198,51 @@ export function TodayScreen({
           </span>
           <Icon name="chevron" className="w-4 h-4 shrink-0 text-text-tertiary" />
         </button>
+
+        {/* Bills Due ---------------------------------------------------- */}
+        {dueUtilities.length > 0 && (
+          <section className="card p-4 border border-status-due-soon/30 bg-surface-raised">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold text-status-due">
+                <Icon name="zap" className="w-4 h-4 text-accent-500" strokeWidth={2} />
+                Bills Due · {dueUtilities.length}
+              </h2>
+              <button
+                onClick={() => onNavigate("utilities")}
+                className="text-xs font-medium text-accent-text hover:underline"
+              >
+                View Bills →
+              </button>
+            </div>
+            <div className="space-y-2">
+              {dueUtilities.map((util) => (
+                <div
+                  key={util.id}
+                  className="flex items-center justify-between py-2 px-3 rounded-xl bg-surface-sunken border border-border-subtle"
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-sm font-medium text-text truncate">{util.name}</p>
+                    <p className="text-xs text-text-tertiary">
+                      {util.daysUntilDue === null
+                        ? "Payment due"
+                        : util.daysUntilDue < 0
+                          ? `Overdue by ${Math.abs(util.daysUntilDue)}d`
+                          : util.daysUntilDue === 0
+                            ? "Due today"
+                            : `Due in ${util.daysUntilDue}d`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onNavigate("utilities")}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-accent-500 text-text-on-accent text-xs font-semibold hover:bg-accent-600 active:scale-95 transition-all"
+                  >
+                    Log Bill
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Needs attention ---------------------------------------------- */}
         {grouped.length === 0 ? (
