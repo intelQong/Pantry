@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { jarFill, jarCaption } from "../src/client/lib/jar";
 
-/** Only the three fields the fill maths reads. */
+/** Only the fields the fill maths reads. */
 const cycle = (
   restockIntervalDays: number,
   daysUntilDue: number | null,
   lastPurchasedAt: number | null = 1_700_000_000,
-) => ({ restockIntervalDays, daysUntilDue, lastPurchasedAt });
+  daysSince: number | null = 3,
+) => ({ restockIntervalDays, daysUntilDue, lastPurchasedAt, daysSince });
 
 describe("jarFill", () => {
   it("is full the day it was bought and empty the day it is due", () => {
@@ -52,5 +53,10 @@ describe("jarCaption", () => {
 
   it("says so when the item has never been bought", () => {
     expect(jarCaption(cycle(14, 9, null))).toBe("not bought yet");
+  });
+
+  it("says how long ago, not 'due today', for something with no due date", () => {
+    // A non-staple is never due; null used to fall through to "due today".
+    expect(jarCaption(cycle(14, null, 1_700_000_000, 12))).toBe("12d ago");
   });
 });

@@ -53,6 +53,22 @@ describe("utilities seeding", () => {
     expect(seeded.find((i) => i.name === "Gas Cylinder")!.unit).toBe("cylinder");
   });
 
+  it("never puts the gas cylinder on a due clock -- it lasts as long as it lasts", async () => {
+    const items = await (await get("/api/items", memberCookie)).json<
+      Array<{ id: string; name: string; isStaple: boolean; status: string; daysUntilDue: number | null }>
+    >();
+    const gas = items.find((i) => i.name === "Gas Cylinder")!;
+    expect(gas.isStaple).toBe(false);
+
+    // Bought 90 days ago: a staple on a 30-day cycle would be overdue by now.
+    await env.DB.prepare("UPDATE item SET last_purchased_at = ? WHERE id = ?")
+      .bind(Math.floor(Date.now() / 1000) - 90 * 86400, gas.id)
+      .run();
+    const after = (await (await get("/api/items", memberCookie)).json<typeof items>()).find((i) => i.id === gas.id)!;
+    expect(after.status).toBe("ok");
+    expect(after.daysUntilDue).toBeNull();
+  });
+
   it("locks the wifi interval so a late payment does not stretch the cycle", async () => {
     const res = await get("/api/items", memberCookie);
     const items = await res.json<Array<{ id: string; name: string; restockIntervalDays: number; intervalLocked: boolean }>>();

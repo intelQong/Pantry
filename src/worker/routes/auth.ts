@@ -28,12 +28,14 @@ const DEFAULT_CATEGORIES: Array<[string, string]> = [
  * Gas, electricity and wifi seeded into the Utilities category for every new
  * household -- mirrors migrations/0008_utilities.sql, which backfills the
  * same three items for households that already existed. Wifi is locked
- * because it is a fixed 30-day billing cycle; gas and electricity learn.
+ * because it is a fixed 30-day billing cycle; electricity learns. Gas is not
+ * a staple at all (0012): a cylinder runs until it runs out, so it never goes
+ * due -- Bills just shows how long ago it was bought.
  */
-const UTILITY_ITEMS: Array<[name: string, unit: string, locked: boolean]> = [
-  ["Gas Cylinder", "cylinder", false],
-  ["Electricity Recharge", "recharge", false],
-  ["Wifi Bill", "month", true],
+const UTILITY_ITEMS: Array<[name: string, unit: string, locked: boolean, staple: boolean]> = [
+  ["Gas Cylinder", "cylinder", false, false],
+  ["Electricity Recharge", "recharge", false, true],
+  ["Wifi Bill", "month", true, true],
 ];
 
 const auth = new Hono<AppEnv>();
@@ -170,7 +172,7 @@ auth.post("/setup", async (c) => {
     );
 
     if (name === "Utilities") {
-      for (const [itemName, unit, locked] of UTILITY_ITEMS) {
+      for (const [itemName, unit, locked, staple] of UTILITY_ITEMS) {
         statements.push(
           c.env.DB.prepare(
             `INSERT INTO item (
@@ -184,7 +186,7 @@ auth.post("/setup", async (c) => {
             categoryId,
             unit,
             1,
-            1,
+            staple ? 1 : 0,
             30,
             locked ? 1 : 0,
             0,

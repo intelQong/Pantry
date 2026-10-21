@@ -55,7 +55,8 @@ export interface ItemWithStatus extends Item {
   status: RestockStatus;
   /** Whole days since the last purchase; null if never purchased. */
   daysSince: number | null;
-  /** Days until due. Negative means overdue by that many days. */
+  /** Days until due. Negative means overdue by that many days. null for a
+   *  non-staple, which has no due date and is always status "ok". */
   daysUntilDue: number | null;
   /** True when this item already sits on the pending list, so we stop nagging. */
   onList: boolean;

@@ -25,6 +25,14 @@ const LOG_LABEL: Record<string, string> = {
   month: "Log payment",
 };
 
+/** "Bought today", "Bought yesterday", "Bought 12 days ago". */
+function boughtAgo(daysSince: number | null): string {
+  if (daysSince === null) return "Not bought yet";
+  if (daysSince === 0) return "Bought today";
+  if (daysSince === 1) return "Bought yesterday";
+  return `Bought ${daysSince} days ago`;
+}
+
 export function UtilitiesScreen({ categories }: { categories: Category[] }) {
   const [items, setItems] = useState<ItemWithStatus[]>([]);
   const [allPurchases, setAllPurchases] = useState<PurchaseWithItem[]>([]);
@@ -220,23 +228,29 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
             <div key={item.id} className="p-4 card-row space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-text">{item.name}</span>
-                <StatusBadge status={item.status} />
+                {/* Something with no due date (a gas cylinder runs until it
+                    runs out) has no status to show. */}
+                {item.isStaple && <StatusBadge status={item.status} />}
               </div>
 
-              <div className="flex items-center justify-between text-sm text-text-secondary">
-                <span>
-                  {item.daysSince === null
-                    ? "Never logged"
-                    : `Last paid ${item.daysSince}d ago`}
-                </span>
-                <span>
-                  {item.daysUntilDue === null
-                    ? ""
-                    : item.daysUntilDue < 0
-                      ? `Overdue by ${Math.abs(item.daysUntilDue)}d`
-                      : `Due in ${item.daysUntilDue}d`}
-                </span>
-              </div>
+              {item.isStaple ? (
+                <div className="flex items-center justify-between text-sm text-text-secondary">
+                  <span>
+                    {item.daysSince === null
+                      ? "Never logged"
+                      : `Last paid ${item.daysSince}d ago`}
+                  </span>
+                  <span>
+                    {item.daysUntilDue === null
+                      ? ""
+                      : item.daysUntilDue < 0
+                        ? `Overdue by ${Math.abs(item.daysUntilDue)}d`
+                        : `Due in ${item.daysUntilDue}d`}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary">{boughtAgo(item.daysSince)}</p>
+              )}
 
               {lastAmount !== null && (
                 <div className="text-sm text-text-tertiary">

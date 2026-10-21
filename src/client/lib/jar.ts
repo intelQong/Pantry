@@ -12,7 +12,7 @@
 
 import type { ItemWithStatus } from "@shared/types";
 
-type Cycle = Pick<ItemWithStatus, "restockIntervalDays" | "daysUntilDue" | "lastPurchasedAt">;
+type Cycle = Pick<ItemWithStatus, "restockIntervalDays" | "daysUntilDue" | "lastPurchasedAt" | "daysSince">;
 
 /**
  * How much of the restock cycle is left, 0 to 1. Full the day it was bought,
@@ -38,8 +38,10 @@ export function jarFill(item: Cycle): number | null {
 /** The line under the jar. Short: it sits in a third-of-a-screen column. */
 export function jarCaption(item: Cycle): string {
   if (item.lastPurchasedAt === null) return "not bought yet";
+  // No due date (a non-staple): say how long ago instead of a countdown.
+  if (item.daysUntilDue === null) return item.daysSince === null ? "bought" : `${item.daysSince}d ago`;
 
-  const days = item.daysUntilDue ?? 0;
+  const days = item.daysUntilDue;
   if (days > 0) return `${days}d left`;
   if (days === 0) return "due today";
   return `${-days}d late`;

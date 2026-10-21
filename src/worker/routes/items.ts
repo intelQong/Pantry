@@ -52,6 +52,12 @@ function toItem(row: ItemRow): Item {
 
 function toItemWithStatus(row: ItemRow, leadDays: number, now: number, onList: boolean): ItemWithStatus {
   const { status, daysSince, daysUntilDue, neverPurchased } = computeStatus(row, leadDays, now);
+  // A non-staple is never watched (see is_staple in 0001_init.sql): a gas
+  // cylinder lasts as long as it lasts. No due date, so nothing anywhere can
+  // call it due or overdue -- not Today, not Bills, not the digest.
+  if (row.is_staple !== 1) {
+    return { ...toItem(row), status: "ok", daysSince: neverPurchased ? null : daysSince, daysUntilDue: null, onList };
+  }
   // The engine counts a never-bought item from created_at so it can still go
   // due; the API says null, as ItemWithStatus documents, so no screen tells
   // someone they paid a bill "0d ago" that was never paid.
