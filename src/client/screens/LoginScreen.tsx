@@ -1,3 +1,4 @@
+import { MadeBy } from "../components/MadeBy";
 import { useState, useCallback, useRef, useEffect } from "react";
 import * as api from "../api";
 import { BrandMark } from "../components/BrandMark";
@@ -89,6 +90,7 @@ export function LoginScreen({
         <p className="text-center text-xs text-text-tertiary mt-8">
           Shared by everyone in the household
         </p>
+        <MadeBy className="mt-2" />
       </div>
     </div>
   );

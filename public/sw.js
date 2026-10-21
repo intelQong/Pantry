@@ -107,13 +107,19 @@ self.addEventListener("push", (event) => {
   let body = "You have items to restock";
   let title = "Pantry";
   let data = {};
+  // The restock digest is one daily notification. List activity sends its own
+  // tag per person, so their pushes replace each other instead of piling up.
+  let tag = "pantry-restock";
+  let renotify = true;
 
   if (event.data) {
     try {
       const payload = event.data.json();
       title = payload.title || title;
       body = payload.body || body;
-      data = payload.data || {};
+      data = payload.data || (payload.url ? { url: payload.url } : {});
+      tag = payload.tag || tag;
+      if (typeof payload.renotify === "boolean") renotify = payload.renotify;
     } catch {
       body = event.data.text() || body;
     }
@@ -124,8 +130,8 @@ self.addEventListener("push", (event) => {
       body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      tag: "pantry-restock",
-      renotify: true,
+      tag,
+      renotify,
       data,
     }),
   );
@@ -139,7 +145,9 @@ self.addEventListener("notificationclick", (event) => {
       // Focus an existing window if one is open
       for (const client of clients) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
-          return client.focus();
+          // Take the open app to where the notification points, not just to
+          // whatever screen it was last left on.
+          return client.focus().then((c) => (url !== "/" && c.navigate ? c.navigate(url) : c));
         }
       }
       // Otherwise open a new one

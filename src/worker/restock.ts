@@ -191,6 +191,8 @@ export function localParts(nowSeconds: number, timeZone: string): LocalParts {
  * range -- that's the only reason this isn't just `start <= hour < end`.
  */
 export function isQuietHour(hour: number, quietStart: number, quietEnd: number): boolean {
+  // [start, start) is empty: equal ends mean no quiet hours, not all-day quiet.
+  if (quietStart === quietEnd) return false;
   if (quietStart < quietEnd) {
     return hour >= quietStart && hour < quietEnd;
   }

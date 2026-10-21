@@ -241,6 +241,11 @@ describe("isQuietHour", () => {
     expect(isQuietHour(6, 22, 7)).toBe(true);
     expect(isQuietHour(7, 22, 7)).toBe(false);
   });
+
+  it("treats equal start and end as no quiet hours at all", () => {
+    expect(isQuietHour(0, 0, 0)).toBe(false);
+    expect(isQuietHour(9, 9, 9)).toBe(false);
+  });
 });
 
 describe("localParts", () => {

@@ -4,6 +4,7 @@ import { nowSeconds } from "../env";
 import { requireSession, requireMember } from "../middleware";
 import { isValidQty } from "./purchases";
 import { auditStatement } from "../audit";
+import { notifyListActivity } from "../activity";
 import type { ListEntry } from "../../shared/types";
 
 const list = new Hono<AppEnv>();
@@ -180,6 +181,14 @@ list.post("/list", requireMember, async (c) => {
 
   const customName = itemId ? null : body.customName!.trim();
 
+  // Pushed after the response, so the other phone hearing about it never
+  // slows down the phone doing it. A replayed add returned above, so it is
+  // never announced twice.
+  const announce = (row: ListEntryRow) =>
+    c.executionCtx.waitUntil(
+      notifyListActivity(c.env, session.householdId, session.memberId!, "added", row.display_name, now),
+    );
+
   /**
    * Folds this add into the row that is already there.
    *
@@ -199,6 +208,7 @@ list.post("/list", requireMember, async (c) => {
       )
       .run();
     const row = await fetchListEntry(c.env.DB, target.id, session.householdId);
+    announce(row!);
     return c.json(toListEntry(row!));
   };
 
@@ -251,6 +261,7 @@ list.post("/list", requireMember, async (c) => {
   }
 
   const row = await fetchListEntry(c.env.DB, id, session.householdId);
+  announce(row!);
   return c.json(toListEntry(row!), 201);
 });
 

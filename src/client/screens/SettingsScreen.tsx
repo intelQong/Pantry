@@ -7,6 +7,7 @@ import { usePushSubscription } from "../hooks/usePushSubscription";
 import { Icon } from "../components/Icon";
 import { Avatar } from "../components/Avatar";
 import { AuditLogSheet } from "../components/AuditLogSheet";
+import { MadeBy } from "../components/MadeBy";
 
 export function SettingsScreen({
   currentMemberId,
@@ -352,7 +353,7 @@ export function SettingsScreen({
             <div className="space-y-3">
               <p className="flex items-center gap-1.5 text-sm text-text-secondary">
                 <Icon name="check" className="w-4 h-4 text-status-ok" strokeWidth={2.5} />
-                Reminders are on for this device.
+                Notifications are on for this device.
               </p>
               <button
                 onClick={handleTestPush}
@@ -410,7 +411,7 @@ export function SettingsScreen({
             More Settings
           </h3>
           <p className="text-sm text-text-tertiary">
-            Notification rules, category & aisle order, and appearance customisation — coming soon.
+            Category & aisle order, and appearance customisation — coming soon.
           </p>
         </section>
 
@@ -422,9 +423,10 @@ export function SettingsScreen({
           Log Out
         </button>
 
-        <p className="text-center text-xs text-text-tertiary pt-2">
-          Pantry v0.1.0
-        </p>
+        <div className="pt-2 space-y-1">
+          <MadeBy />
+          <p className="text-center text-xs text-text-tertiary">Pantry v0.1.0</p>
+        </div>
       </div>
 
       <AuditLogSheet

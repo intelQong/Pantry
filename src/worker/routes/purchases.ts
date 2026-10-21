@@ -6,6 +6,7 @@ import { relearnInterval } from "../restock";
 import { auditStatement } from "../audit";
 // Pure and dependency-free, so the audit summary shows money exactly as the app does.
 import { formatMoney } from "../../client/lib/money";
+import { notifyListActivity } from "../activity";
 import type { Purchase } from "../../shared/types";
 
 const purchases = new Hono<AppEnv>();
@@ -251,6 +252,16 @@ purchases.post("/list/:id/bought", requireMember, async (c) => {
   // harder to reason about.
   if (itemIdForPurchase) {
     await relearnInterval(c.env.DB, itemIdForPurchase, session.householdId);
+    const bought = await c.env.DB.prepare("SELECT name FROM item WHERE id = ? AND household_id = ?")
+      .bind(itemIdForPurchase, session.householdId)
+      .first<{ name: string }>();
+    // Only a buy that actually resolved the entry gets here, so a double-tap
+    // or a retry is never announced twice.
+    if (bought) {
+      c.executionCtx.waitUntil(
+        notifyListActivity(c.env, session.householdId, session.memberId!, "bought", bought.name, now),
+      );
+    }
   }
 
   return c.json({ ok: true, purchaseId, alreadyResolved: false });
@@ -342,6 +353,21 @@ purchases.post("/purchases", requireMember, async (c) => {
 
   // Runs after the batch above, same reasoning as in POST /list/:id/bought.
   await relearnInterval(c.env.DB, itemId, session.householdId);
+
+  // A logged grocery spend is a purchase the other phone would want to know
+  // about; a bill payment is not shopping, and Bills already shows it.
+  const logged = await c.env.DB.prepare(
+    `SELECT i.name, COALESCE(cat.name, '') = 'Utilities' AS is_utility
+       FROM item i LEFT JOIN category cat ON cat.id = i.category_id
+      WHERE i.id = ? AND i.household_id = ?`,
+  )
+    .bind(itemId, session.householdId)
+    .first<{ name: string; is_utility: number }>();
+  if (logged && logged.is_utility !== 1) {
+    c.executionCtx.waitUntil(
+      notifyListActivity(c.env, session.householdId, session.memberId!, "bought", logged.name, now),
+    );
+  }
 
   const row = await c.env.DB.prepare(
     `SELECT id, item_id, purchased_at, qty, unit, price_total, bought_by, note

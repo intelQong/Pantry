@@ -14,6 +14,12 @@ import { nowSeconds } from "./env";
 export interface PushPayload {
   title: string;
   body: string;
+  /** Notifications sharing a tag replace each other instead of stacking. */
+  tag?: string;
+  /** Whether a replacement buzzes again. */
+  renotify?: boolean;
+  /** Where tapping the notification opens. */
+  url?: string;
 }
 
 export interface PushSummary {
