@@ -191,3 +191,24 @@ describe("insights with history", () => {
     expect(d.totalSpend).toBe(4 * 30000 + 5000);
   });
 });
+
+describe("utility bills stay out of spending", () => {
+  // Bills are paid up front. The spend figures answer "what will the shop bill
+  // be", so a wifi payment counted in them overstates it.
+  it("leaves utility payments out of every total, bucket and category", async () => {
+    const before = await fetchInsights();
+    const cats = await (await get("/api/categories", cookie)).json<Array<{ id: string; name: string }>>();
+    const utilities = cats.find((c) => c.name === "Utilities")!;
+    const items = await (await get("/api/items", cookie)).json<Array<{ id: string; categoryId: string | null }>>();
+    const wifi = items.find((i) => i.categoryId === utilities.id)!;
+    await addPurchase(wifi.id, 1, 1, 99900);
+
+    const after = await fetchInsights();
+    expect(after.totalSpend).toBe(before.totalSpend);
+    expect(after.totalPurchases).toBe(before.totalPurchases);
+    expect(after.spendLast30).toBe(before.spendLast30);
+    expect(after.byMonth).toEqual(before.byMonth);
+    expect(after.byCategory.map((c) => c.name)).not.toContain("Utilities");
+    expect(after.topItems.map((i) => i.itemId)).not.toContain(wifi.id);
+  });
+});

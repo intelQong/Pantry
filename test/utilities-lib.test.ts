@@ -113,14 +113,15 @@ describe("groupMonthlyBills", () => {
     expect(bills[0]!.groceryPurchases).toHaveLength(2);
     expect(bills[0]!.utilityTotal).toBe(50000); // ৳500
     expect(bills[0]!.utilityPurchases).toHaveLength(1);
-    expect(bills[0]!.totalSpend).toBe(70000); // ৳700
+    // No combined figure: bills are paid up front, so adding them to the shop
+    // bill would overstate what is owed.
+    expect(bills[0]).not.toHaveProperty("totalSpend");
     expect(bills[0]!.nextMonthLabel).toContain("October");
 
     // August
     expect(bills[1]!.key).toBe("2026-08");
     expect(bills[1]!.groceryTotal).toBe(40000); // ৳400 (bill to be paid in September)
     expect(bills[1]!.utilityTotal).toBe(100000); // ৳1000
-    expect(bills[1]!.totalSpend).toBe(140000);
     expect(bills[1]!.nextMonthLabel).toContain("September");
   });
 

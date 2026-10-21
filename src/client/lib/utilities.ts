@@ -201,7 +201,6 @@ export interface MonthlyBillBreakdown<T = Purchase> {
   groceryPurchases: T[];
   utilityTotal: number;
   utilityPurchases: T[];
-  totalSpend: number;
   allPurchases: T[];
 }
 
@@ -250,7 +249,6 @@ export function groupMonthlyBills<T extends { itemId: string; purchasedAt: numbe
       groceryPurchases: [...groceryPurchases].sort((a, b) => b.purchasedAt - a.purchasedAt),
       utilityTotal,
       utilityPurchases: [...utilityPurchases].sort((a, b) => b.purchasedAt - a.purchasedAt),
-      totalSpend: groceryTotal + utilityTotal,
       allPurchases: [...list].sort((a, b) => b.purchasedAt - a.purchasedAt),
     };
   });

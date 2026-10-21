@@ -52,7 +52,9 @@ export function InsightsScreen({ categories, navigate }: { categories: Category[
         api.getItems(),
         api.getList(),
         api.getInsights(),
-        api.getPurchases({ all: true }).catch(() => []),
+        // Groceries only: bills are paid up front and live on the Bills screen,
+        // so counting them here would overstate the month's shop bill.
+        api.getPurchases().catch(() => []),
       ]);
       setItems(all);
       setListItemIds(

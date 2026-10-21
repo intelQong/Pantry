@@ -282,17 +282,16 @@ export function UtilitiesScreen({ categories }: { categories: Category[] }) {
                       )}
                     </div>
                     <p className="text-xs text-text-tertiary mt-1">
-                      Grocery bill (due {m.nextMonthLabel}):{" "}
-                      <span className="font-semibold text-text-secondary">{formatMoney(m.groceryTotal)}</span>
-                      {" · "}
-                      Utilities:{" "}
-                      <span className="font-semibold text-text-secondary">{formatMoney(m.utilityTotal)}</span>
+                      Pay in {m.nextMonthLabel}
+                      {/* Bills were paid at the time, so they sit beside the
+                          shop bill, never inside it. */}
+                      {m.utilityTotal > 0 && <> · Bills already paid {formatMoney(m.utilityTotal)}</>}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="numeral text-sm font-bold text-text">
-                      {formatMoney(m.totalSpend)}
+                      {formatMoney(m.groceryTotal)}
                     </span>
                     <Icon
                       name="chevron"

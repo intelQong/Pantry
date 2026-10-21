@@ -28,7 +28,8 @@ Workers and D1.
 - **Spending insights.** Spend by category and by day, week or month, plus how fast each
   item is used. Receipt totals can be split across the items they paid for.
 - **Bills.** Gas, electricity and wifi are tracked on their own screen, with the same
-  learned due dates as groceries.
+  learned due dates as groceries. They are paid up front, so they are never added to
+  spending or to the month's grocery bill.
 - **History and audit log.** Every past shop, grouped by day and correctable afterwards,
   plus an append-only log of every deletion.
 

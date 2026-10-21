@@ -35,6 +35,18 @@ function dayLabel(key: string): string {
 
 const DAY = 86_400;
 
+/**
+ * Leaves utility payments out of spending.
+ *
+ * Gas, electricity and wifi are paid up front; the shop is settled at the end
+ * of the month. Spending here answers "what will the shop bill be", so a bill
+ * counted in it would overstate exactly the number people plan around. Bills
+ * have their own log on the Bills screen, and History leaves them out on the
+ * same grounds. Usable as `p.${NOT_A_BILL}` too, since it starts at item_id.
+ */
+const NOT_A_BILL = `item_id NOT IN (
+  SELECT u.id FROM item u JOIN category uc ON uc.id = u.category_id WHERE uc.name = 'Utilities')`;
+
 interface Bucket {
   key: string;
   spend: number;
@@ -109,14 +121,14 @@ insights.get("/insights", requireSession, async (c) => {
       `SELECT COUNT(*) AS n,
               COUNT(price_total) AS priced,
               COALESCE(SUM(price_total), 0) AS spend
-         FROM purchase WHERE household_id = ?`,
+         FROM purchase WHERE household_id = ? AND ${NOT_A_BILL}`,
     )
       .bind(householdId)
       .first<{ n: number; priced: number; spend: number }>(),
 
     c.env.DB.prepare(
       `SELECT COUNT(*) AS n, COALESCE(SUM(price_total), 0) AS spend
-         FROM purchase WHERE household_id = ? AND purchased_at >= ?`,
+         FROM purchase WHERE household_id = ? AND ${NOT_A_BILL} AND purchased_at >= ?`,
     )
       .bind(householdId, since30)
       .first<{ n: number; spend: number }>(),
@@ -130,7 +142,7 @@ insights.get("/insights", requireSession, async (c) => {
               MAX(p.purchased_at) AS last_at
          FROM purchase p
          JOIN item i ON i.id = p.item_id
-        WHERE p.household_id = ?
+        WHERE p.household_id = ? AND p.${NOT_A_BILL}
         GROUP BY p.item_id
         ORDER BY purchases DESC, total_qty DESC
         LIMIT 20`,
@@ -147,7 +159,7 @@ insights.get("/insights", requireSession, async (c) => {
          FROM purchase p
          JOIN item i ON i.id = p.item_id
          LEFT JOIN category c ON c.id = i.category_id
-        WHERE p.household_id = ?
+        WHERE p.household_id = ? AND p.${NOT_A_BILL}
         GROUP BY i.category_id
         ORDER BY spend DESC`,
     )
@@ -171,7 +183,7 @@ insights.get("/insights", requireSession, async (c) => {
       `SELECT (purchased_at / 900) * 900 AS block,
               COALESCE(SUM(price_total), 0) AS spend,
               COUNT(*) AS purchases
-         FROM purchase WHERE household_id = ?
+         FROM purchase WHERE household_id = ? AND ${NOT_A_BILL}
         GROUP BY block`,
     )
       .bind(householdId)
