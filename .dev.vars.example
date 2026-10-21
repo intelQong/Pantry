@@ -1,0 +1,7 @@
+# Copy this file to .dev.vars and fill in your secrets.
+# .dev.vars is gitignored — never commit real secrets.
+
+SESSION_SECRET=openssl_rand_base64_32_here
+VAPID_PUBLIC_KEY=your_vapid_public_key_here
+VAPID_PRIVATE_KEY=your_vapid_private_key_here
+VAPID_SUBJECT=mailto:you@example.com

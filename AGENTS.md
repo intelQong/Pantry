@@ -167,7 +167,7 @@ stub `globalThis.fetch`.
   Crypto limit as untested-by-default and verify against a real deploy.
 - **`worker-configuration.d.ts` is gitignored and generated.** Run `npx wrangler types`
   after changing bindings, or typecheck fails on missing `D1Database`/`ExecutionContext`.
-- **`wrangler.jsonc` has a placeholder `database_id`.** Replace it after creating the D1
+- **`wrangler.jsonc` holds the production `database_id`.** It is an identifier, not a credential (using it needs Cloudflare auth). A fork must replace it after creating its own D1
   database — see `docs/DEPLOYMENT.md`.
 - Local D1 state lives in `.wrangler/state/v3/d1`; delete it to reset.
 

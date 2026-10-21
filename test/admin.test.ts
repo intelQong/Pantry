@@ -21,7 +21,7 @@ beforeAll(async () => {
   await post("/api/setup", {
     householdName: "Our Kitchen",
     passcode: "rice2026",
-    memberNames: ["Mahmudul", "Wife"],
+    memberNames: ["Sam", "Riley"],
     adminPasscode: "owner9999",
   });
 
@@ -34,8 +34,8 @@ beforeAll(async () => {
 
 describe("superadmin profile", () => {
   it("marks the first member named at setup as the owner", () => {
-    expect(admin).toMatchObject({ name: "Mahmudul", isAdmin: true, hasAdminPasscode: true });
-    expect(partner).toMatchObject({ name: "Wife", isAdmin: false, hasAdminPasscode: false });
+    expect(admin).toMatchObject({ name: "Sam", isAdmin: true, hasAdminPasscode: true });
+    expect(partner).toMatchObject({ name: "Riley", isAdmin: false, hasAdminPasscode: false });
   });
 
   it("never exposes the passcode hash to the client", async () => {

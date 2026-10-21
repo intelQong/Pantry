@@ -43,7 +43,7 @@ beforeAll(async () => {
   await json("/api/setup", {
     householdName: "Our Kitchen",
     passcode: "rice2026",
-    memberNames: ["Mahmudul", "Partner"],
+    memberNames: ["Sam", "Riley"],
   });
 
   const loginCookie = cookieFrom(await json("/api/login", { passcode: "rice2026" }));

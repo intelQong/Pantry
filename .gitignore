@@ -3,6 +3,8 @@ dist/
 .wrangler/
 .dev.vars
 .dev.vars.*
+# The template is safe to share: placeholders only.
+!.dev.vars.example
 *.local
 .DS_Store
 

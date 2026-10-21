@@ -131,7 +131,7 @@ describe("auth flow", () => {
     res = await json("/api/setup", {
       householdName: "Our Kitchen",
       passcode: "rice2026",
-      memberNames: ["Mahmudul", "Wife"],
+      memberNames: ["Sam", "Riley"],
     });
     expect(res.status).toBe(201);
 

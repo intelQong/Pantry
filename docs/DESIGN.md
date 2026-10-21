@@ -2,7 +2,7 @@
 
 ## Problem
 
-Mahmudul and his wife keep forgetting to restock weekly grocery staples. There is no
+A two-person household keeps forgetting to restock weekly grocery staples. There is no
 system telling them what is running low, no record of how fast things get consumed, and
 no shared place to collect "buy this next time" items between shop visits.
 
